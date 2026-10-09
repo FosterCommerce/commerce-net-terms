@@ -1,6 +1,6 @@
 # Release Notes for Net Terms
 
-## Unreleased
+## 1.0.0 - 2026-10-09
 
 ### Added
 - Added accounts, each with a credit limit or unlimited credit, payment terms and a status.
@@ -11,7 +11,7 @@
 - Added the invoice email.
 - Added payments, applied to invoice lines or orders.
 - Added order billing.
-- Added billing for staff edits to a completed credit order's total, in invoice billing.
+- Added billing for staff edits to the total of a completed order charged to an account, in invoice billing.
 - Added the ability to change one invoice's payment terms.
 - Added the “Payment terms (Net Terms)” field type, which gives an order its own payment terms in order billing.
 - Added due-soon and overdue reminder emails, and the `net-terms/reminders/send` command.
