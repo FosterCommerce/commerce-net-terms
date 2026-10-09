@@ -1,0 +1,79 @@
+{% import '_includes/forms' as forms %}
+
+{% if buyers|length %}
+	<table class="data fullwidth collapsible">
+		<thead>
+			<tr>
+				<th>{{ 'buyer.user'|t('net-terms') }}</th>
+				<th>{{ 'buyer.sublimit'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'buyer.owes'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'buyer.available'|t('net-terms') }}</th>
+				{% if canManage %}<th></th>{% endif %}
+			</tr>
+		</thead>
+		<tbody>
+			{% for buyer in buyers %}
+				{% set buyerUser = buyer.getUser() %}
+				<tr>
+					<th scope="row">
+						{% if buyerUser %}<a href="{{ buyerUser.cpEditUrl }}">{{ buyer.getName() }}</a>{% else %}{{ buyer.getName() }}{% endif %}
+						{% if not buyer.active %}<span class="light">({{ 'buyer.inactive'|t('net-terms') }})</span>{% endif %}
+					</th>
+					<td class="nt-amount-cell" id="buyer-{{ buyer.id }}">
+						{% if canManage %}
+							{{ forms.money({
+								id: 'sublimit-' ~ buyer.id,
+								name: 'sublimit',
+								value: buyer.getSublimitNumber(),
+								currency: currencyCode,
+								currencyLabel: currencyCode,
+								placeholder: 'buyer.noSublimit'|t('net-terms'),
+							}) }}
+						{% else %}
+							{{ buyer.sublimit ? buyer.sublimit|money : 'buyer.noSublimit'|t('net-terms') }}
+						{% endif %}
+					</td>
+					<td class="nt-amount">{{ (owedByBuyerId[buyer.id] ?? zero)|money }}</td>
+					{% set available = availableByBuyerId[buyer.id] %}
+					<td class="nt-amount">
+						{{ available ? available|money : 'account.unlimitedShort'|t('net-terms') }}
+						{% if overSublimitByBuyerId[buyer.id] is defined %}<div class="nt-negative smalltext">{{ 'buyer.overSublimit'|t('net-terms', { amount: overSublimitByBuyerId[buyer.id]|money }) }}</div>{% endif %}
+					</td>
+					{% if canManage %}
+						<td class="thin nowrap">
+							<button type="button" class="btn small" data-nt-action="net-terms/accounts/save-buyer" data-nt-params="{{ { accountId: account.id, buyerId: buyer.id, active: buyer.active ? 1 : 0 }|json_encode }}" data-nt-fields="#buyer-{{ buyer.id }}">{{ 'buyer.saveSublimit'|t('net-terms') }}</button>
+							{% if buyer.active %}
+								<button type="button" class="btn small" data-nt-action="net-terms/accounts/remove-buyer" data-nt-params="{{ { accountId: account.id, buyerId: buyer.id }|json_encode }}" data-nt-confirm="buyer.removeConfirm">{{ 'buyer.remove'|t('net-terms') }}</button>
+							{% else %}
+								<button type="button" class="btn small" data-nt-action="net-terms/accounts/save-buyer" data-nt-params="{{ { accountId: account.id, buyerId: buyer.id, active: 1 }|json_encode }}" data-nt-fields="#buyer-{{ buyer.id }}">{{ 'buyer.reactivate'|t('net-terms') }}</button>
+							{% endif %}
+						</td>
+					{% endif %}
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+{% else %}
+	<p class="light">{{ 'buyer.none'|t('net-terms') }}</p>
+{% endif %}
+
+{% if canManage %}
+	<div class="nt-inline-form" id="new-buyer">
+		{{ forms.elementSelectField({
+			label: 'buyer.add'|t('net-terms'),
+			id: 'newBuyerUserId',
+			name: 'userId',
+			elementType: 'craft\\elements\\User',
+			limit: 1,
+		}) }}
+		{{ forms.moneyField({
+			label: 'buyer.sublimit'|t('net-terms'),
+			id: 'newBuyerSublimit',
+			name: 'sublimit',
+			currency: currencyCode,
+			currencyLabel: currencyCode,
+			placeholder: 'buyer.noSublimit'|t('net-terms'),
+		}) }}
+		<button type="button" class="btn" data-nt-action="net-terms/accounts/save-buyer" data-nt-params="{{ { accountId: account.id }|json_encode }}" data-nt-fields="#new-buyer">{{ 'buyer.addButton'|t('net-terms') }}</button>
+	</div>
+{% endif %}

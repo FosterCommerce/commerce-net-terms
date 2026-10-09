@@ -1,0 +1,72 @@
+{
+	"name": "fostercommerce/commerce-net-terms",
+	"description": "A Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.",
+	"homepage": "https://www.fostercommerce.com/craft-cms-plugins/net-terms",
+	"type": "craft-plugin",
+	"keywords": [
+		"craft",
+		"plugin",
+		"commerce",
+		"credit",
+		"net terms",
+		"invoices",
+		"b2b"
+	],
+	"license": "proprietary",
+	"support": {
+		"email": "support@fostercommerce.com",
+		"issues": "https://github.com/fostercommerce/commerce-net-terms/issues?state=open",
+		"source": "https://github.com/fostercommerce/commerce-net-terms",
+		"docs": "https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs",
+		"rss": "https://github.com/fostercommerce/commerce-net-terms/releases.atom"
+	},
+	"authors": [
+		{
+			"name": "Foster Commerce",
+			"homepage": "https://www.fostercommerce.com"
+		}
+	],
+	"autoload": {
+		"psr-4": {
+			"fostercommerce\\netterms\\": "src/"
+		}
+	},
+	"require": {
+		"php": "^8.2",
+		"craftcms/cms": "^5.10.0",
+		"craftcms/commerce": "^5.4.0",
+		"moneyphp/money": "^4.0"
+	},
+	"require-dev": {
+		"craftcms/phpstan": "dev-main",
+		"craftcms/rector": "dev-main",
+		"fostercommerce/ecs": "dev-main",
+		"fostercommerce/rector": "dev-main",
+		"roave/security-advisories": "dev-latest"
+	},
+	"extra": {
+		"handle": "net-terms",
+		"name": "Net Terms",
+		"developer": "Foster Commerce",
+		"documentationUrl": "https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs",
+		"class": "fostercommerce\\netterms\\Plugin"
+	},
+	"config": {
+		"allow-plugins": {
+			"yiisoft/yii2-composer": true,
+			"craftcms/plugin-installer": true
+		},
+		"platform": {
+			"php": "8.2"
+		}
+	},
+	"prefer-stable": true,
+	"minimum-stability": "dev",
+	"scripts": {
+		"phpstan": "phpstan --memory-limit=1G",
+		"ecs:check": "ecs check --ansi --memory-limit=1G",
+		"ecs:fix": "ecs check --ansi --fix --memory-limit=1G",
+		"rector:fix": "rector process --config rector.php",
+		"rector:dry-run": "rector process --dry-run --config rector.php"
+	}
+}

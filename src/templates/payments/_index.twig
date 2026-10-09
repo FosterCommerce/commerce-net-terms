@@ -1,0 +1,22 @@
+{% extends '_layouts/cp' %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'payments' %}
+{% set title = 'nav.payments'|t('net-terms') %}
+
+{% block actionButton %}
+	{% if currentUser.can('net-terms-managePayments') %}
+		<a href="{{ url('net-terms/payments/new') }}" class="btn submit add icon">{{ 'payment.record'|t('net-terms') }}</a>
+	{% endif %}
+{% endblock %}
+
+{% block content %}
+	{% if payments|length %}
+		{% include 'net-terms/payments/_table' with { showAccount: true } %}
+		{% include '_includes/pagination' with { pageInfo: pageInfo, itemLabel: 'payment.item'|t('net-terms'), itemsLabel: 'payment.items'|t('net-terms') } %}
+	{% else %}
+		<p class="zilch">{{ 'payment.none'|t('net-terms') }}</p>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

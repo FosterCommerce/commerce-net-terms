@@ -1,0 +1,15 @@
+{% if canManagePayments %}
+	<div class="nt-section-header">
+		<div class="buttons">
+			<button type="button" class="btn" data-nt-action="net-terms/invoices/issue" data-nt-params="{{ { accountId: account.id }|json_encode }}" data-nt-confirm="invoice.issueConfirm">{{ 'invoice.issue'|t('net-terms') }}</button>
+			<button type="button" class="btn" data-nt-action="net-terms/invoices/issue" data-nt-params="{{ { accountId: account.id, send: 1 }|json_encode }}" data-nt-confirm="invoice.issueConfirm">{{ 'invoice.issueAndSend'|t('net-terms') }}</button>
+		</div>
+	</div>
+{% endif %}
+
+{% if invoices|length %}
+	{% include 'net-terms/invoices/_table' with { showAccount: false } %}
+	{% include '_includes/pagination' with { pageInfo: pageInfo, itemLabel: 'invoice.item'|t('net-terms'), itemsLabel: 'invoice.items'|t('net-terms') } %}
+{% else %}
+	<p class="light">{{ 'invoice.none'|t('net-terms') }}</p>
+{% endif %}

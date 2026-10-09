@@ -1,0 +1,46 @@
+{#
+	The invoice lines or orders a payment can be applied to, with an amount input for each.
+	Expects: targets (AllocationTarget[]), billing, currencyCode, postedAmounts.
+#}
+{% import '_includes/forms' as forms %}
+{% set isOrders = billing.value == 'orders' %}
+
+<div class="nt-allocations" data-nt-allocations>
+	<div class="nt-section-header">
+		<h2>{{ (isOrders ? 'application.applyHeadingOrders' : 'application.applyHeading')|t('net-terms') }}</h2>
+		<button type="button" class="btn small" data-nt-clear-allocations>{{ 'application.clear'|t('net-terms') }}</button>
+	</div>
+	<p class="light">{{ (isOrders ? 'payment.allocateInstructionsOrders' : 'payment.allocateInstructions')|t('net-terms') }}</p>
+
+	<table class="data fullwidth collapsible" data-nt-currency="{{ currencyCode }}">
+		<thead>
+			<tr>
+				<th>{{ (isOrders ? 'order.reference' : 'invoice.number')|t('net-terms') }}</th>
+				<th>{{ 'invoice.dateDue'|t('net-terms') }}</th>
+				<th>{{ 'buyer.user'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'invoice.balance'|t('net-terms') }}</th>
+				<th>{{ 'application.apply'|t('net-terms') }}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for target in targets %}
+				<tr data-nt-target data-nt-balance="{{ target.getBalanceDecimal() }}">
+					<td><a href="{{ target.url }}">{{ target.label }}</a></td>
+					<td class="{{ target.isOverdue ? 'error' }}">{{ target.dateDue ? target.dateDue|date('short') : '-' }}</td>
+					<td>{{ target.buyerName }}</td>
+					<td class="nt-amount">{{ target.balance|money }}</td>
+					<td class="nt-amount-cell">
+						{{ forms.money({
+							id: 'allocate-' ~ target.id,
+							name: 'amounts[' ~ target.id ~ ']',
+							value: postedAmounts[target.id].value ?? null,
+							currency: currencyCode,
+							currencyLabel: currencyCode,
+						}) }}
+						<button type="button" class="nt-link-button" data-nt-pay-in-full>{{ 'application.payInFull'|t('net-terms') }}</button>
+					</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+</div>

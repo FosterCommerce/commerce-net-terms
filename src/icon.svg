@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Credit card foreground: Heroicons v2 "credit-card" (solid). MIT License, (c) Tailwind Labs. https://heroicons.com -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 1000">
+	<defs>
+		<style>.netterms_icon_fg{fill:#fff;}.netterms_icon_bg{fill:url(#netterms_icon_gradient);}</style>
+		<radialGradient id="netterms_icon_gradient" cx="970.38" cy="921.11" fx="970.38" fy="921.11" r="1225.76" gradientUnits="userSpaceOnUse">
+			<stop offset=".03" stop-color="#bd9664"/>
+			<stop offset=".12" stop-color="#95836a"/>
+			<stop offset=".23" stop-color="#6c6f71"/>
+			<stop offset=".31" stop-color="#526375"/>
+			<stop offset=".36" stop-color="#495f77"/>
+			<stop offset=".42" stop-color="#3f5267"/>
+			<stop offset=".54" stop-color="#27323f"/>
+			<stop offset=".61" stop-color="#171d25"/>
+		</radialGradient>
+	</defs>
+		<rect class="netterms_icon_bg" x="38.38" y="38.38" width="923.24" height="923.24" rx="255.52" ry="255.52"/>
+	<g transform="translate(188, 188) scale(26)">
+		<path class="netterms_icon_fg" d="M4.5 3.75a3 3 0 0 0-3 3v.75h21v-.75a3 3 0 0 0-3-3h-15Z"/>
+		<path class="netterms_icon_fg" fill-rule="evenodd" clip-rule="evenodd" d="M22.5 9.75h-21v7.5a3 3 0 0 0 3 3h15a3 3 0 0 0 3-3v-7.5Zm-18 3.75a.75.75 0 0 1 .75-.75h6a.75.75 0 0 1 0 1.5h-6a.75.75 0 0 1-.75-.75Zm.75 2.25a.75.75 0 0 0 0 1.5h3a.75.75 0 0 0 0-1.5h-3Z"/>
+	</g>
+</svg>

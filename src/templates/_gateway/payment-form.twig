@@ -1,0 +1,12 @@
+<p>{{ 'gateway.paymentFormNote'|t('net-terms') }}</p>
+
+{% if availableCredit %}
+	<p>{{ 'gateway.availableCredit'|t('net-terms', { available: availableCredit|money }) }}</p>
+{% endif %}
+
+{% if canCharge %}
+	<button type="submit" class="{{ submitButtonClasses }}">{{ submitButtonText }}</button>
+{% else %}
+	{# No button, since a checkout script can re-enable a disabled one #}
+	<p role="alert">{{ 'gateway.notEnoughCredit'|t('net-terms') }}</p>
+{% endif %}

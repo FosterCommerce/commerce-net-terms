@@ -1,0 +1,110 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'payments' %}
+{% set fullPageForm = true %}
+{% set title = 'payment.record'|t('net-terms') %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.payments'|t('net-terms'), url: url('net-terms/payments') },
+] %}
+
+{% block content %}
+	{{ actionInput('net-terms/payments/save') }}
+
+	{% if accountOptions|length %}
+		{{ forms.selectField({
+			label: 'payment.account'|t('net-terms'),
+			id: 'accountId',
+			name: 'accountId',
+			value: payment.accountId,
+			options: [{ label: 'payment.chooseAccount'|t('net-terms'), value: '' }]|merge(accountOptions),
+			required: true,
+			errors: payment.getErrors('accountId'),
+			inputAttributes: {
+				'data-nt-reload-param': 'accountId',
+			},
+		}) }}
+
+		{{ forms.moneyField({
+			label: 'payment.amount'|t('net-terms'),
+			id: 'amount',
+			name: 'amount',
+			value: payment.getAmountNumber(),
+			currency: payment.amount.getCurrency().getCode(),
+			currencyLabel: payment.amount.getCurrency().getCode(),
+			required: true,
+			errors: payment.getErrors('amount'),
+		}) }}
+
+		{% if openTargets|length %}
+			{{ forms.checkboxField({
+				label: 'payment.receivedFull'|t('net-terms', { amount: openTotal|money }),
+				id: 'receivedFull',
+				inputAttributes: {
+					'data-nt-received-full': openTotalDecimal,
+				},
+			}) }}
+		{% endif %}
+
+		{{ forms.selectField({
+			label: 'payment.method'|t('net-terms'),
+			id: 'method',
+			name: 'method',
+			value: payment.method.value,
+			options: methodOptions|map((label, value) => { label: label, value: value })|values,
+		}) }}
+
+		{{ forms.textField({
+			label: 'payment.reference'|t('net-terms'),
+			instructions: 'payment.referenceInstructions'|t('net-terms'),
+			id: 'reference',
+			name: 'reference',
+			value: payment.reference,
+			errors: payment.getErrors('reference'),
+		}) }}
+
+		{{ forms.dateField({
+			label: 'payment.dateReceived'|t('net-terms'),
+			id: 'dateReceived',
+			name: 'dateReceived',
+			value: payment.dateReceived,
+			required: true,
+			errors: payment.getErrors('dateReceived'),
+		}) }}
+
+		{{ forms.textareaField({
+			label: 'payment.note'|t('net-terms'),
+			id: 'note',
+			name: 'note',
+			value: payment.note,
+			rows: 3,
+		}) }}
+
+		{% if openTargets|length %}
+			<div class="nt-section">
+				{% include 'net-terms/payments/_targets-table' with {
+					targets: openTargets,
+					currencyCode: payment.amount.getCurrency().getCode(),
+					postedAmounts: craft.app.request.getBodyParam('amounts') ?? {},
+				} %}
+
+				<div class="nt-summary" data-nt-summary data-nt-currency="{{ payment.amount.getCurrency().getCode() }}">
+					<div><span>{{ 'payment.summaryReceived'|t('net-terms') }}</span><strong data-nt-summary-received></strong></div>
+					<div><span>{{ 'payment.summaryApplied'|t('net-terms') }}</span><strong data-nt-summary-applied></strong></div>
+					<div><span>{{ 'payment.summaryUnapplied'|t('net-terms') }}</span><strong data-nt-summary-unapplied></strong></div>
+					<p class="error hidden" data-nt-summary-over>{{ 'payment.summaryOver'|t('net-terms') }}</p>
+				</div>
+
+				{% if billing.value == 'orders' %}
+					<p class="light">{{ 'payment.noEmail'|t('net-terms') }}</p>
+				{% endif %}
+			</div>
+		{% endif %}
+	{% else %}
+		<p class="zilch">{{ 'account.noAccounts'|t('net-terms') }}</p>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

@@ -1,0 +1,38 @@
+{% if canManage and billing.value == 'invoices' %}
+	<div class="nt-section-header">
+		<button type="button" class="btn" data-nt-modal="net-terms/accounts/adjustment-modal" data-nt-params="{{ { accountId: account.id }|json_encode }}">{{ 'adjustment.add'|t('net-terms') }}</button>
+	</div>
+{% endif %}
+
+{% if entries|length %}
+	<table class="data fullwidth collapsible">
+		<thead>
+			<tr>
+				<th>{{ 'ledger.date'|t('net-terms') }}</th>
+				<th>{{ 'ledger.type'|t('net-terms') }}</th>
+				<th>{{ 'buyer.user'|t('net-terms') }}</th>
+				<th>{{ 'ledger.detail'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'ledger.amount'|t('net-terms') }}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for entry in entries %}
+				{% set entryBuyer = entry.buyerId ? (buyersById[entry.buyerId] ?? null) : null %}
+				{% set entryOrder = entry.orderId ? (ordersById[entry.orderId] ?? null) : null %}
+				<tr>
+					<td>{{ entry.dateCreated|datetime('short') }}</td>
+					<td>{{ entry.type.label() }}</td>
+					<td>{{ entryBuyer ? entryBuyer.getName() : 'ledger.account'|t('net-terms') }}</td>
+					<td>
+						{% if entryOrder %}<a href="{{ entryOrder.cpEditUrl }}">{{ entryOrder.reference ?: entryOrder.shortNumber }}</a>{% endif %}
+						{% if entry.note %}{{ entry.note }}{% endif %}
+					</td>
+					<td class="nt-amount{{ entry.amount.isNegative() ? ' nt-negative' }}">{{ entry.amount|money }}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	{% include '_includes/pagination' with { pageInfo: pageInfo, itemLabel: 'ledger.item'|t('net-terms'), itemsLabel: 'ledger.items'|t('net-terms') } %}
+{% else %}
+	<p class="light">{{ 'ledger.none'|t('net-terms') }}</p>
+{% endif %}

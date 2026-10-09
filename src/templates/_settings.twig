@@ -1,0 +1,100 @@
+{% import '_includes/forms' as forms %}
+
+{% embed '_includes/forms/field' with { label: 'settings.billing'|t('net-terms') } %}
+	{% block input %}
+		{% if netTermsGateway %}
+			<p>
+				{{ (isOrderBilling ? 'settings.billingOrders' : 'settings.billingInvoices')|t('net-terms', { gateway: netTermsGateway.name }) }}
+				<a href="{{ netTermsGateway.getCpEditUrl() }}">{{ 'settings.editGateway'|t('net-terms') }}</a>
+			</p>
+		{% else %}
+			<p>
+				{{ 'settings.billingNoGateway'|t('net-terms') }}
+				<a href="{{ cpUrl('commerce/settings/gateways/new') }}">{{ 'settings.addGateway'|t('net-terms') }}</a>
+			</p>
+		{% endif %}
+	{% endblock %}
+{% endembed %}
+
+<hr>
+
+{{ forms.selectField({
+	label: 'settings.defaultSublimitMode'|t('net-terms'),
+	instructions: 'settings.defaultSublimitModeInstructions'|t('net-terms'),
+	id: 'defaultSublimitMode',
+	name: 'defaultSublimitMode',
+	value: settings.defaultSublimitMode,
+	options: sublimitModeOptions|map((label, value) => { label: label, value: value })|values,
+	errors: settings.getErrors('defaultSublimitMode'),
+}) }}
+
+{{ forms.textField({
+	label: 'settings.defaultPaymentTerms'|t('net-terms'),
+	instructions: 'settings.defaultPaymentTermsInstructions'|t('net-terms'),
+	id: 'defaultPaymentTerms',
+	name: 'defaultPaymentTerms',
+	type: 'number',
+	min: 0,
+	size: 6,
+	value: settings.defaultPaymentTerms,
+	errors: settings.getErrors('defaultPaymentTerms'),
+}) }}
+
+{{ forms.textField({
+	label: 'settings.invoicePath'|t('net-terms'),
+	instructions: 'settings.invoicePathInstructions'|t('net-terms'),
+	id: 'invoicePath',
+	name: 'invoicePath',
+	value: settings.invoicePath,
+	placeholder: 'account/invoice?number={number}',
+	errors: settings.getErrors('invoicePath'),
+}) }}
+
+{{ forms.textField({
+	label: 'settings.invoiceEmailTemplate'|t('net-terms'),
+	instructions: 'settings.invoiceEmailTemplateInstructions'|t('net-terms'),
+	id: 'invoiceEmailTemplate',
+	name: 'invoiceEmailTemplate',
+	value: settings.invoiceEmailTemplate,
+	placeholder: '_emails/net-terms-invoice',
+	errors: settings.getErrors('invoiceEmailTemplate'),
+}) }}
+
+{{ forms.textField({
+	label: 'settings.orderPath'|t('net-terms'),
+	instructions: 'settings.orderPathInstructions'|t('net-terms'),
+	id: 'orderPath',
+	name: 'orderPath',
+	value: settings.orderPath,
+	placeholder: 'account/net-terms-pay?number={number}',
+	errors: settings.getErrors('orderPath'),
+}) }}
+
+<hr>
+
+<h2>{{ 'settings.reminders'|t('net-terms') }}</h2>
+<p>{{ 'settings.remindersInstructions'|t('net-terms', { url: cpUrl('utilities/system-messages') })|md(inlineOnly: true) }}</p>
+
+{{ forms.textField({
+	label: 'settings.dueSoonReminderDays'|t('net-terms'),
+	instructions: 'settings.dueSoonReminderDaysInstructions'|t('net-terms'),
+	id: 'dueSoonReminderDays',
+	name: 'dueSoonReminderDays',
+	type: 'number',
+	min: 1,
+	size: 6,
+	value: settings.dueSoonReminderDays,
+	errors: settings.getErrors('dueSoonReminderDays'),
+}) }}
+
+{{ forms.textField({
+	label: 'settings.overdueReminderDays'|t('net-terms'),
+	instructions: 'settings.overdueReminderDaysInstructions'|t('net-terms'),
+	id: 'overdueReminderDays',
+	name: 'overdueReminderDays',
+	type: 'number',
+	min: 0,
+	size: 6,
+	value: settings.overdueReminderDays,
+	errors: settings.getErrors('overdueReminderDays'),
+}) }}

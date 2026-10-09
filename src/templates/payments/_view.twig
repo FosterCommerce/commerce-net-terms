@@ -1,0 +1,109 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'payments' %}
+{% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
+{% set holder = account.getHolder() %}
+{% set currencyCode = account.getCurrency().getCode() %}
+{% set canApply = canManagePayments and unapplied.isPositive() and openTargets|length %}
+{% set fullPageForm = canApply %}
+
+{% set title = 'payment.title'|t('net-terms', { method: payment.method.label(), amount: payment.amount|money }) %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.payments'|t('net-terms'), url: url('net-terms/payments') },
+] %}
+
+{% block content %}
+	{% if canApply %}
+		{{ actionInput('net-terms/payments/apply') }}
+		{{ hiddenInput('paymentId', payment.id) }}
+	{% endif %}
+
+	<div class="nt-stats">
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'account.holder'|t('net-terms') }}</span>
+			<span class="nt-stat-value"><a href="{{ account.cpEditUrl }}">{{ holder.name }}</a></span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'payment.dateReceived'|t('net-terms') }}</span>
+			<span class="nt-stat-value">{{ payment.dateReceived|date('short') }}</span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'payment.reference'|t('net-terms') }}</span>
+			<span class="nt-stat-value">
+				{{ payment.reference ?? '-' }}
+			</span>
+		</div>
+		{% if refunded.isPositive() %}
+			<div class="nt-stat">
+				<span class="nt-stat-label">{{ 'payment.refunded'|t('net-terms') }}</span>
+				<span class="nt-stat-value">{{ refunded|money }}</span>
+			</div>
+		{% endif %}
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'payment.unapplied'|t('net-terms') }}</span>
+			<span class="nt-stat-value">{{ unapplied|money }}</span>
+		</div>
+	</div>
+
+	{% if payment.note %}
+		<p>{{ payment.note }}</p>
+	{% endif %}
+
+	<div class="nt-section">
+		<div class="nt-section-header">
+			<h2>{{ 'application.heading'|t('net-terms') }}</h2>
+		</div>
+
+		{% if applications|length %}
+			<table class="data fullwidth collapsible">
+				<thead>
+					<tr>
+						<th>{{ 'ledger.date'|t('net-terms') }}</th>
+						<th>{{ (billing.value == 'orders' ? 'order.reference' : 'invoice.number')|t('net-terms') }}</th>
+						<th>{{ 'buyer.user'|t('net-terms') }}</th>
+						<th class="nt-amount">{{ 'payment.amount'|t('net-terms') }}</th>
+						<th></th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for application in applications %}
+						{% set target = applicationTargets[application.id] ?? null %}
+						<tr>
+							<td>{{ application.dateCreated|datetime('short') }}</td>
+							<td>{% if target %}<a href="{{ target.url }}">{{ target.label }}</a>{% endif %}</td>
+							<td>{{ target ? target.buyerName }}</td>
+							{# An order application's figure is what its capture still applies, after reversals and refunds #}
+							{% set orderFigures = application.invoiceLineId ? null : orderApplicationFigures[application.id] %}
+							<td class="nt-amount">{{ (orderFigures ? orderFigures.applied : application.amount)|money }}</td>
+							<td class="thin nowrap">
+								{% if orderFigures and not orderFigures.applied.isPositive() %}
+									<span class="light">{{ 'application.undone'|t('net-terms') }}</span>
+								{% elseif not orderFigures and not application.getIsActive() %}
+									<span class="light">{{ 'application.reversedOn'|t('net-terms', { date: application.dateReversed|date('short') }) }}</span>
+								{% elseif canManagePayments %}
+									<button type="button" class="btn small" data-nt-action="net-terms/payments/reverse" data-nt-params="{{ { applicationId: application.id }|json_encode }}" data-nt-confirm="application.reverseConfirm">{{ 'application.reverse'|t('net-terms') }}</button>
+								{% endif %}
+							</td>
+						</tr>
+					{% endfor %}
+				</tbody>
+			</table>
+		{% else %}
+			<p class="light">{{ 'application.none'|t('net-terms') }}</p>
+		{% endif %}
+	</div>
+
+	{% if canApply %}
+		<div class="nt-section">
+			{% include 'net-terms/payments/_targets-table' with {
+				targets: openTargets,
+				postedAmounts: {},
+			} %}
+		</div>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

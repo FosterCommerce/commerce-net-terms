@@ -1,0 +1,17 @@
+{% import '_includes/forms' as forms %}
+
+<h2>{{ 'invoice.changeTerms'|t('net-terms') }}</h2>
+
+{{ hiddenInput('invoiceId', invoice.id) }}
+
+{{ forms.textField({
+	label: 'invoice.paymentTerms'|t('net-terms'),
+	instructions: 'invoice.paymentTermsInstructions'|t('net-terms', { dateIssued: invoice.dateIssued|date('short') }),
+	id: 'invoicePaymentTerms',
+	name: 'paymentTerms',
+	type: 'number',
+	min: 0,
+	size: 6,
+	value: invoice.getPaymentTerms(),
+	required: true,
+}) }}

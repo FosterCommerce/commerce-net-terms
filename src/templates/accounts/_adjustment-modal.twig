@@ -1,0 +1,30 @@
+{% import '_includes/forms' as forms %}
+{% set currencyCode = account.getCurrency().getCode() %}
+
+<h2>{{ 'adjustment.add'|t('net-terms') }}</h2>
+
+{{ hiddenInput('accountId', account.id) }}
+
+{{ forms.moneyField({
+	label: 'adjustment.amount'|t('net-terms'),
+	instructions: 'adjustment.amountInstructions'|t('net-terms'),
+	id: 'adjustmentAmount',
+	name: 'amount',
+	currency: currencyCode,
+	currencyLabel: currencyCode,
+	required: true,
+}) }}
+
+{{ forms.selectField({
+	label: 'buyer.user'|t('net-terms'),
+	id: 'adjustmentBuyerId',
+	name: 'buyerId',
+	options: [{ label: 'ledger.account'|t('net-terms'), value: '' }]|merge(buyers|map(buyer => { label: buyer.getName(), value: buyer.id })),
+}) }}
+
+{{ forms.textField({
+	label: 'adjustment.note'|t('net-terms'),
+	id: 'adjustmentNote',
+	name: 'note',
+	required: true,
+}) }}

@@ -1,0 +1,15 @@
+{% import '_includes/forms' as forms %}
+
+<div class="flex">
+	{{ forms.text({
+		id: field.getInputId(),
+		describedBy: field.describedBy,
+		name: field.handle,
+		type: 'number',
+		min: 0,
+		size: 6,
+		value: value,
+		placeholder: defaultTerms,
+	}) }}
+	<span class="light">{{ 'field.paymentTermsUnit'|t('net-terms', { days: defaultTerms }) }}</span>
+</div>

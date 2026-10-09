@@ -1,0 +1,55 @@
+{% extends '_layouts/cp' %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'accounts' %}
+{% set title = 'nav.accounts'|t('net-terms') %}
+{% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
+
+{% block actionButton %}
+	{% if currentUser.can('net-terms-manageAccounts') %}
+		<a href="{{ url('net-terms/accounts/new') }}" class="btn submit add icon">{{ 'account.new'|t('net-terms') }}</a>
+	{% endif %}
+{% endblock %}
+
+{% block content %}
+	{% if accounts|length %}
+		<table class="data fullwidth collapsible">
+			<thead>
+				<tr>
+					<th>{{ 'account.holder'|t('net-terms') }}</th>
+					<th>{{ 'account.status'|t('net-terms') }}</th>
+					<th class="nt-amount">{{ 'account.creditLimit'|t('net-terms') }}</th>
+					<th class="nt-amount">{{ 'account.owed'|t('net-terms') }}</th>
+					<th class="nt-amount">{{ 'account.available'|t('net-terms') }}</th>
+					<th class="nt-amount">{{ 'account.unapplied'|t('net-terms') }}</th>
+				</tr>
+			</thead>
+			<tbody>
+				{% for account in accounts %}
+					{% set holder = account.getHolder() %}
+					{% set figures = netTerms.accounts.getAccountFigures(account) %}
+					<tr>
+						<th scope="row">
+							<a href="{{ account.cpEditUrl }}">{{ holder.name }}</a>
+							<div class="light smalltext">{{ holder.email }}</div>
+						</th>
+						<td>
+							<span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}
+						</td>
+						<td class="nt-amount">{{ account.creditLimit ? account.creditLimit|money : 'account.unlimitedShort'|t('net-terms') }}</td>
+						<td class="nt-amount">{{ figures.owed|money }}</td>
+						<td class="nt-amount">
+							{{ figures.room ? figures.room|money : 'account.unlimitedShort'|t('net-terms') }}
+							{% if figures.overLimit %}<div class="nt-negative smalltext">{{ 'account.overLimit'|t('net-terms', { amount: figures.overLimit|money }) }}</div>{% endif %}
+						</td>
+						<td class="nt-amount">{{ netTerms.payments.getUnappliedByAccount(account)|money }}</td>
+					</tr>
+				{% endfor %}
+			</tbody>
+		</table>
+	{% else %}
+		<p class="zilch">{{ 'account.noAccounts'|t('net-terms') }}</p>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

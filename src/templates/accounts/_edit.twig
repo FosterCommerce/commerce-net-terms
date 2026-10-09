@@ -1,0 +1,92 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'accounts' %}
+{% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
+{% set holder = account.getHolder() %}
+{% set currencyCode = account.getCurrency().getCode() %}
+{% set isNew = not account.id %}
+
+{% set title = isNew ? 'account.new'|t('net-terms') : holder.name %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.accounts'|t('net-terms'), url: url('net-terms/accounts') },
+] %}
+
+{% set fullPageForm = canManage and (isNew or tab == 'account') %}
+{% set formActions = isNew ? [] : [
+	{
+		label: 'Save and continue editing'|t('app'),
+		redirect: ('net-terms/accounts/' ~ account.id)|hash,
+		shortcut: true,
+		retainScroll: true,
+	},
+	{
+		label: 'account.delete'|t('net-terms'),
+		action: 'net-terms/accounts/delete',
+		redirect: 'net-terms/accounts'|hash,
+		confirm: 'account.deleteConfirm'|t('net-terms'),
+		destructive: true,
+	},
+] %}
+
+{% if not isNew %}
+	{% set accountUrl = 'net-terms/accounts/' ~ account.id %}
+	{% set tabs = {
+		account: { label: 'account.tab'|t('net-terms'), url: url(accountUrl) },
+		buyers: { label: 'buyer.heading'|t('net-terms'), url: url(accountUrl ~ '/buyers') },
+		(billing.value == 'orders' ? 'orders' : 'invoices'): billing.value == 'orders'
+			? { label: 'order.heading'|t('net-terms'), url: url(accountUrl ~ '/orders') }
+			: { label: 'nav.invoices'|t('net-terms'), url: url(accountUrl ~ '/invoices') },
+		payments: { label: 'nav.payments'|t('net-terms'), url: url(accountUrl ~ '/payments') },
+	}|merge(billing.value == 'invoices' ? {
+		ledger: { label: 'ledger.heading'|t('net-terms'), url: url(accountUrl ~ '/ledger') },
+	} : {}) %}
+	{% set selectedTab = tab %}
+{% endif %}
+
+{% block content %}
+	{% if not isNew %}
+		{% set figures = netTerms.accounts.getAccountFigures(account) %}
+		<div class="nt-stats">
+			<div class="nt-stat">
+				<span class="nt-stat-label">{{ 'account.creditLimit'|t('net-terms') }}</span>
+				<span class="nt-stat-value">{{ account.creditLimit ? account.creditLimit|money : 'account.unlimitedShort'|t('net-terms') }}</span>
+			</div>
+			<div class="nt-stat">
+				<span class="nt-stat-label">{{ 'account.owed'|t('net-terms') }}</span>
+				<span class="nt-stat-value">{{ figures.owed|money }}</span>
+			</div>
+			<div class="nt-stat">
+				<span class="nt-stat-label">{{ 'account.available'|t('net-terms') }}</span>
+				<span class="nt-stat-value">{{ figures.room ? figures.room|money : 'account.unlimitedShort'|t('net-terms') }}</span>
+				{% if figures.overLimit %}
+					<div class="nt-negative smalltext">{{ 'account.overLimit'|t('net-terms', { amount: figures.overLimit|money }) }}</div>
+				{% endif %}
+			</div>
+			<div class="nt-stat">
+				<span class="nt-stat-label">{{ 'account.unapplied'|t('net-terms') }}</span>
+				<span class="nt-stat-value">{{ netTerms.payments.getUnappliedByAccount(account)|money }}</span>
+			</div>
+			{% if not canManage %}
+				<div class="nt-stat">
+					<span class="nt-stat-label">{{ 'account.sublimitMode'|t('net-terms') }}</span>
+					<span class="nt-stat-value">{{ account.getEffectiveSublimitMode().label() }}</span>
+				</div>
+				<div class="nt-stat">
+					<span class="nt-stat-label">{{ 'account.paymentTerms'|t('net-terms') }}</span>
+					<span class="nt-stat-value">{{ 'account.paymentTermsDays'|t('net-terms', { days: account.getEffectivePaymentTerms() }) }}</span>
+				</div>
+				<div class="nt-stat">
+					<span class="nt-stat-label">{{ 'account.status'|t('net-terms') }}</span>
+					<span class="nt-stat-value"><span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}</span>
+				</div>
+			{% endif %}
+		</div>
+	{% endif %}
+
+	{% include 'net-terms/accounts/_tabs/' ~ (isNew ? 'account' : tab) %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

@@ -1,0 +1,126 @@
+{% extends '_layouts/cp' %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'invoices' %}
+{% set account = invoice.getAccount() %}
+{% set holder = account.getHolder() %}
+{% set status = figures.status %}
+
+{% set title = 'invoice.title'|t('net-terms', { number: invoice.number }) %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.invoices'|t('net-terms'), url: url('net-terms/invoices') },
+] %}
+
+{% block actionButton %}
+	{% if canManagePayments and not invoice.getIsVoided() %}
+		<div class="buttons">
+			<button type="button" class="btn" data-nt-modal="net-terms/invoices/terms-modal" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}">{{ 'invoice.changeTerms'|t('net-terms') }}</button>
+			<button type="button" class="btn" data-nt-action="net-terms/invoices/send" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}">{{ 'invoice.send'|t('net-terms') }}</button>
+			<a class="btn submit" href="{{ url('net-terms/payments/new', { accountId: account.id }) }}">{{ 'payment.record'|t('net-terms') }}</a>
+		</div>
+	{% endif %}
+{% endblock %}
+
+{% block content %}
+	<div class="nt-stats">
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'account.holder'|t('net-terms') }}</span>
+			<span class="nt-stat-value"><a href="{{ account.cpEditUrl }}">{{ holder.name }}</a></span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'invoice.status'|t('net-terms') }}</span>
+			<span class="nt-stat-value"><span class="status {{ status.color() }}"></span>{{ status.label() }}</span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'invoice.dateIssued'|t('net-terms') }}</span>
+			<span class="nt-stat-value">{{ invoice.dateIssued|date('short') }}</span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'invoice.dateDue'|t('net-terms') }}</span>
+			<span class="nt-stat-value{{ invoice.getIsOverdue() ? ' nt-negative' }}">{{ invoice.dateDue|date('short') }}</span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'invoice.total'|t('net-terms') }}</span>
+			<span class="nt-stat-value">{{ figures.total|money }}</span>
+		</div>
+		<div class="nt-stat">
+			<span class="nt-stat-label">{{ 'invoice.balance'|t('net-terms') }}</span>
+			<span class="nt-stat-value">{{ figures.balance|money }}</span>
+		</div>
+	</div>
+
+	{% for line in lines %}
+		{% set buyer = line.getBuyer() %}
+		{% set lineFigures = figuresByLineId[line.id] %}
+		<div class="nt-section">
+			<div class="nt-section-header">
+				<h2>{{ buyer ? buyer.getName() : 'ledger.account'|t('net-terms') }}</h2>
+				<span>
+					{{ 'invoice.lineSummary'|t('net-terms', {
+						amount: lineFigures.amount|money,
+						paid: lineFigures.paid|money,
+						balance: lineFigures.balance|money,
+					}) }}
+				</span>
+			</div>
+
+			<table class="data fullwidth collapsible">
+				<thead>
+					<tr>
+						<th>{{ 'ledger.date'|t('net-terms') }}</th>
+						<th>{{ 'ledger.type'|t('net-terms') }}</th>
+						<th>{{ 'ledger.detail'|t('net-terms') }}</th>
+						<th class="nt-amount">{{ 'ledger.amount'|t('net-terms') }}</th>
+					</tr>
+				</thead>
+				<tbody>
+					{% for entry in entriesByLineId[line.id] %}
+						{% set entryOrder = entry.orderId ? (ordersById[entry.orderId] ?? null) : null %}
+						<tr>
+							<td>{{ entry.dateCreated|datetime('short') }}</td>
+							<td>{{ entry.type.label() }}</td>
+							<td>
+								{% if entryOrder %}<a href="{{ entryOrder.cpEditUrl }}">{{ entryOrder.reference ?: entryOrder.shortNumber }}</a>{% endif %}
+								{% if entry.note %}{{ entry.note }}{% endif %}
+							</td>
+							<td class="nt-amount{{ entry.amount.isNegative() ? ' nt-negative' }}">{{ entry.amount|money }}</td>
+						</tr>
+					{% else %}
+						<tr><td colspan="4" class="light">{{ 'invoice.lineCleared'|t('net-terms') }}</td></tr>
+					{% endfor %}
+				</tbody>
+			</table>
+
+			{% set applications = applicationsByLineId[line.id] %}
+			{% if applications|length %}
+				<h3>{{ 'application.heading'|t('net-terms') }}</h3>
+				<table class="data fullwidth collapsible">
+					<tbody>
+						{% for application in applications %}
+							{% set payment = paymentsById[application.paymentId] %}
+							<tr>
+								<td>{{ application.dateCreated|datetime('short') }}</td>
+								<td><a href="{{ url('net-terms/payments/' ~ payment.id) }}">{{ payment.method.label() }}{% if payment.reference %} {{ payment.reference }}{% endif %}</a></td>
+								<td class="nt-amount">{{ application.amount|money }}</td>
+								{% if canManagePayments %}
+									<td class="thin">
+										<button type="button" class="btn small" data-nt-action="net-terms/payments/reverse" data-nt-params="{{ { applicationId: application.id }|json_encode }}" data-nt-confirm="application.reverseConfirm">{{ 'application.reverse'|t('net-terms') }}</button>
+									</td>
+								{% endif %}
+							</tr>
+						{% endfor %}
+					</tbody>
+				</table>
+			{% endif %}
+		</div>
+	{% endfor %}
+
+	{% if canManagePayments and not invoice.getIsVoided() %}
+		<div class="nt-section">
+			<button type="button" class="btn caution" data-nt-action="net-terms/invoices/void" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}" data-nt-confirm="invoice.voidConfirm">{{ 'invoice.void'|t('net-terms') }}</button>
+		</div>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

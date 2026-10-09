@@ -1,0 +1,79 @@
+{% import '_includes/forms' as forms %}
+
+{% if canManage %}
+	{{ actionInput('net-terms/accounts/save') }}
+	{{ redirectInput('net-terms/accounts') }}
+	{{ hiddenInput('storeId', account.storeId) }}
+	{% if account.id %}{{ hiddenInput('accountId', account.id) }}{% endif %}
+
+	{% if isNew %}
+		{{ forms.elementSelectField({
+			label: 'account.holder'|t('net-terms'),
+			instructions: 'account.holderInstructions'|t('net-terms'),
+			id: 'holderId',
+			name: 'holderId',
+			elementType: 'craft\\elements\\User',
+			limit: 1,
+			elements: holder ? [holder] : [],
+			required: true,
+			errors: account.getErrors('holderId'),
+		}) }}
+	{% endif %}
+
+	{{ forms.lightswitchField({
+		label: 'account.unlimited'|t('net-terms'),
+		instructions: 'account.unlimitedInstructions'|t('net-terms'),
+		id: 'unlimited',
+		name: 'unlimited',
+		on: account.unlimited,
+		reverseToggle: 'credit-limit-field',
+	}) }}
+
+	{{ forms.moneyField({
+		fieldAttributes: {
+			id: 'credit-limit-field',
+			class: account.unlimited ? 'hidden' : null,
+		},
+		label: 'account.creditLimit'|t('net-terms'),
+		instructions: 'account.creditLimitInstructions'|t('net-terms'),
+		id: 'creditLimit',
+		name: 'creditLimit',
+		value: account.getCreditLimitNumber(),
+		currency: currencyCode,
+		currencyLabel: currencyCode,
+		required: true,
+		errors: account.getErrors('creditLimit'),
+	}) }}
+
+	{{ forms.selectField({
+		label: 'account.sublimitMode'|t('net-terms'),
+		instructions: 'account.sublimitModeInstructions'|t('net-terms'),
+		id: 'sublimitMode',
+		name: 'sublimitMode',
+		value: account.sublimitMode ? account.sublimitMode.value : '',
+		options: [{ label: 'account.useDefault'|t('net-terms', { value: defaultSublimitMode.label() }), value: '' }]|merge(sublimitModeOptions|map((label, value) => { label: label, value: value })|values),
+		errors: account.getErrors('sublimitMode'),
+	}) }}
+
+	{{ forms.textField({
+		label: 'account.paymentTerms'|t('net-terms'),
+		instructions: 'account.paymentTermsInstructions'|t('net-terms'),
+		id: 'paymentTerms',
+		name: 'paymentTerms',
+		type: 'number',
+		min: 0,
+		size: 6,
+		value: account.paymentTerms,
+		placeholder: defaultPaymentTerms,
+		errors: account.getErrors('paymentTerms'),
+	}) }}
+
+	{{ forms.selectField({
+		label: 'account.status'|t('net-terms'),
+		instructions: 'account.statusInstructions'|t('net-terms'),
+		id: 'status',
+		name: 'status',
+		value: account.status.value,
+		options: statusOptions|map((label, value) => { label: label, value: value })|values,
+	}) }}
+{% endif %}

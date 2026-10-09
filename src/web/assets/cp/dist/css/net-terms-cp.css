@@ -1,0 +1,157 @@
+.nt-stats {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+	gap: 12px;
+	margin-bottom: 24px;
+}
+
+.nt-stat {
+	padding: 12px 14px;
+	border: 1px solid var(--hairline-color);
+	border-radius: var(--large-border-radius);
+	background: var(--gray-050);
+}
+
+.nt-stat-label {
+	display: block;
+	margin-bottom: 4px;
+	color: var(--medium-text-color);
+	font-size: 12px;
+}
+
+.nt-stat-value {
+	font-size: 18px;
+	font-weight: 600;
+}
+
+.nt-section {
+	margin-top: 32px;
+}
+
+.nt-section-header {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: center;
+	justify-content: space-between;
+	gap: 8px;
+	margin-bottom: 8px;
+}
+
+.nt-section-header h2 {
+	margin: 0;
+}
+
+.nt-inline-form {
+	display: flex;
+	flex-wrap: wrap;
+	align-items: flex-end;
+	gap: 8px;
+	margin-top: 12px;
+}
+
+.nt-inline-form .field {
+	margin: 0;
+}
+
+.nt-amount-cell .money-container {
+	max-width: 160px;
+}
+
+.nt-amount {
+	text-align: right;
+	white-space: nowrap;
+}
+
+.nt-link-button {
+	display: block;
+	margin-top: 4px;
+	padding: 0;
+	border: 0;
+	background: none;
+	color: var(--link-color);
+	font-size: 12px;
+	cursor: pointer;
+}
+
+.nt-link-button:hover {
+	text-decoration: underline;
+}
+
+.nt-summary {
+	display: grid;
+	gap: 6px;
+	max-width: 360px;
+	margin: 16px 0 0 auto;
+	padding: 12px 14px;
+	border: 1px solid var(--hairline-color);
+	border-radius: var(--large-border-radius);
+	background: var(--gray-050);
+}
+
+.nt-summary div {
+	display: flex;
+	justify-content: space-between;
+	gap: 16px;
+}
+
+.nt-summary p {
+	margin: 0;
+}
+
+.nt-negative {
+	color: var(--error-color);
+}
+
+.fc-plugin-footer {
+	text-align: right;
+}
+
+.fc-plugin-credit {
+	display: inline-flex;
+	align-items: center;
+	gap: 8px;
+	text-decoration: none;
+	color: var(--medium-text-color);
+	font-size: 12px;
+	transition: color 0.2s ease;
+}
+
+.fc-plugin-credit:hover {
+	color: var(--text-color);
+}
+
+.fc-credit-text {
+	opacity: 0;
+	transform: translateX(8px);
+	transition: opacity 0.3s ease 0.1s, transform 0.3s ease 0.1s;
+}
+
+.fc-plugin-credit:hover .fc-credit-text {
+	opacity: 1;
+	transform: translateX(0);
+}
+
+.fc-credit-logo {
+	display: flex;
+	align-items: center;
+}
+
+.fc-fc-logo {
+	width: 100px;
+	height: 25px;
+	color: var(--medium-text-color);
+	transition: color 0.3s ease;
+}
+
+.fc-fc-logo path[fill="#D8AF7C"] {
+	fill: currentcolor;
+	transition: fill 0.3s ease;
+}
+
+.fc-plugin-credit:hover .fc-fc-logo {
+	color: var(--text-color);
+}
+
+.fc-plugin-credit:hover .fc-fc-logo path[fill="#D8AF7C"] {
+	fill: #D8AF7C;
+}

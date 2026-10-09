@@ -1,0 +1,38 @@
+{% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
+{% set figuresByInvoiceId = netTerms.invoices.getFiguresByInvoiceId(invoices) %}
+
+<table class="data fullwidth collapsible">
+	<thead>
+		<tr>
+			<th>{{ 'invoice.number'|t('net-terms') }}</th>
+			{% if showAccount %}<th>{{ 'account.holder'|t('net-terms') }}</th>{% endif %}
+			<th>{{ 'invoice.status'|t('net-terms') }}</th>
+			<th>{{ 'invoice.dateIssued'|t('net-terms') }}</th>
+			<th>{{ 'invoice.dateDue'|t('net-terms') }}</th>
+			<th class="nt-amount">{{ 'invoice.total'|t('net-terms') }}</th>
+			<th class="nt-amount">{{ 'invoice.balance'|t('net-terms') }}</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for invoice in invoices %}
+			{% set figures = figuresByInvoiceId[invoice.id] %}
+			{% set status = figures.status %}
+			<tr>
+				<th scope="row"><a href="{{ invoice.cpEditUrl }}">{{ invoice.number }}</a></th>
+				{% if showAccount %}
+					{% set invoiceAccount = invoice.getAccount() %}
+					{% set invoiceHolder = invoiceAccount.getHolder() %}
+					<td><a href="{{ invoiceAccount.cpEditUrl }}">{{ invoiceHolder.name }}</a></td>
+				{% endif %}
+				<td>
+					<span class="status {{ status.color() }}"></span>{{ status.label() }}
+					{% if not invoice.getIsVoided() and invoice.dateDue < now and figures.balance.isPositive() %}<span class="error">{{ 'invoice.overdue'|t('net-terms') }}</span>{% endif %}
+				</td>
+				<td>{{ invoice.dateIssued|date('short') }}</td>
+				<td>{{ invoice.dateDue|date('short') }}</td>
+				<td class="nt-amount">{{ figures.total|money }}</td>
+				<td class="nt-amount">{{ figures.balance|money }}</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>

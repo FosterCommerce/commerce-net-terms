@@ -1,0 +1,36 @@
+{% set creditOrders = craft.app.plugins.getPlugin('net-terms').creditOrders %}
+
+{% if orders|length %}
+	<table class="data fullwidth collapsible">
+		<thead>
+			<tr>
+				<th>{{ 'order.reference'|t('net-terms') }}</th>
+				<th>{{ 'invoice.status'|t('net-terms') }}</th>
+				<th>{{ 'order.dateOrdered'|t('net-terms') }}</th>
+				<th>{{ 'invoice.dateDue'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'order.total'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'invoice.balance'|t('net-terms') }}</th>
+			</tr>
+		</thead>
+		<tbody>
+			{% for order in orders %}
+				{% set balance = creditOrders.getBalance(order) %}
+				{% set dateDue = creditOrders.getDateDue(order, account) %}
+				<tr>
+					<th scope="row"><a href="{{ order.cpEditUrl }}">{{ creditOrders.getLabel(order) }}</a></th>
+					<td>
+						{{ order.paidStatusHtml|raw }}
+						{% if creditOrders.getIsOverdue(order, account) %}<span class="error">{{ 'invoice.overdue'|t('net-terms') }}</span>{% endif %}
+					</td>
+					<td>{{ order.dateOrdered|date('short') }}</td>
+					<td>{{ dateDue ? dateDue|date('short') : '-' }}</td>
+					<td class="nt-amount">{{ order.totalPrice|currency(order.currency) }}</td>
+					<td class="nt-amount">{{ balance|money }}</td>
+				</tr>
+			{% endfor %}
+		</tbody>
+	</table>
+	{% include '_includes/pagination' with { pageInfo: pageInfo, itemLabel: 'order.item'|t('net-terms'), itemsLabel: 'order.items'|t('net-terms') } %}
+{% else %}
+	<p class="light">{{ 'order.none'|t('net-terms') }}</p>
+{% endif %}

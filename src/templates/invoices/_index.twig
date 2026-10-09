@@ -1,0 +1,16 @@
+{% extends '_layouts/cp' %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'invoices' %}
+{% set title = 'nav.invoices'|t('net-terms') %}
+
+{% block content %}
+	{% if invoices|length %}
+		{% include 'net-terms/invoices/_table' with { showAccount: true } %}
+		{% include '_includes/pagination' with { pageInfo: pageInfo, itemLabel: 'invoice.item'|t('net-terms'), itemsLabel: 'invoice.items'|t('net-terms') } %}
+	{% else %}
+		<p class="zilch">{{ 'invoice.none'|t('net-terms') }}</p>
+	{% endif %}
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

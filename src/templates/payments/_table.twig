@@ -1,0 +1,33 @@
+{% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
+{% set figuresByPaymentId = netTerms.payments.getFiguresByPaymentId(payments) %}
+
+<table class="data fullwidth collapsible">
+	<thead>
+		<tr>
+			<th>{{ 'payment.dateReceived'|t('net-terms') }}</th>
+			{% if showAccount %}<th>{{ 'account.holder'|t('net-terms') }}</th>{% endif %}
+			<th>{{ 'payment.method'|t('net-terms') }}</th>
+			<th>{{ 'payment.reference'|t('net-terms') }}</th>
+			<th class="nt-amount">{{ 'payment.amount'|t('net-terms') }}</th>
+			<th class="nt-amount">{{ 'payment.refunded'|t('net-terms') }}</th>
+			<th class="nt-amount">{{ 'payment.unapplied'|t('net-terms') }}</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for payment in payments %}
+			<tr>
+				<th scope="row"><a href="{{ url('net-terms/payments/' ~ payment.id) }}">{{ payment.dateReceived|date('short') }}</a></th>
+				{% if showAccount %}
+					{% set paymentAccount = netTerms.accounts.getAccountById(payment.accountId) %}
+					<td><a href="{{ paymentAccount.cpEditUrl }}">{{ paymentAccount.getHolder().name }}</a></td>
+				{% endif %}
+				<td>{{ payment.method.label() }}</td>
+				<td>{{ payment.reference ?? '-' }}</td>
+				<td class="nt-amount">{{ payment.amount|money }}</td>
+				{% set refunded = figuresByPaymentId[payment.id].refunded %}
+				<td class="nt-amount">{{ refunded.isPositive() ? refunded|money : '-' }}</td>
+				<td class="nt-amount">{{ figuresByPaymentId[payment.id].unapplied|money }}</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>
