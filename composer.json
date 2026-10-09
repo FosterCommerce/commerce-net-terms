@@ -1,6 +1,6 @@
 {
 	"name": "fostercommerce/commerce-net-terms",
-	"description": "A Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.",
+	"description": "Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.",
 	"homepage": "https://www.fostercommerce.com/craft-cms-plugins/net-terms",
 	"type": "craft-plugin",
 	"keywords": [

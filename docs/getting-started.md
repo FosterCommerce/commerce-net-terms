@@ -1,6 +1,6 @@
 # Getting started
 
-A Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
+Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
 
 This walks you from `composer require` to an invoice for an order charged to an account. By the end you know how an account, its buyers, the gateway and an invoice fit together.
 

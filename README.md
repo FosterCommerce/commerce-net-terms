@@ -1,8 +1,10 @@
+![Net Terms](resources/img/header.png)
+
 # Net Terms
 
 Give business customers a credit limit to buy now and pay their invoice later on set terms.
 
-A Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
+Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
 
 ## Overview
 
