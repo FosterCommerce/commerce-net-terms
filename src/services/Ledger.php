@@ -66,7 +66,7 @@ class Ledger extends Component
 	/**
 	 * @return Entry[]
 	 */
-	public function getEntriesByAccountId(int $accountId, ?int $limit = null): array
+	public function getEntriesByAccountId(int $accountId): array
 	{
 		/** @var EntryRecord[] $records */
 		$records = EntryRecord::find()
@@ -78,7 +78,6 @@ class Ledger extends Component
 				'dateCreated' => SORT_DESC,
 				'id' => SORT_DESC,
 			])
-			->limit($limit)
 			->all();
 
 		return array_map($this->createEntryFromRecord(...), $records);
@@ -331,13 +330,6 @@ class Ledger extends Component
 				]));
 			}
 
-			$line = $charge->invoiceLineId !== null ? Plugin::getInstance()->getInvoices()->getLineById($charge->invoiceLineId) : null;
-
-			// Leave the refund uninvoiced when it exceeds the line's balance, so the balance never goes negative
-			$invoiceLineId = $line instanceof InvoiceLine && Plugin::getInstance()->getInvoices()->getLineBalance($line)->greaterThanOrEqual($amount)
-				? $line->id
-				: null;
-
 			return $this->addEntry(new Entry([
 				'accountId' => $charge->accountId,
 				'buyerId' => $charge->buyerId,
@@ -345,13 +337,13 @@ class Ledger extends Component
 				'amount' => $amount->negative(),
 				'orderId' => $charge->orderId,
 				'transactionHash' => $transactionHash,
-				'invoiceLineId' => $invoiceLineId,
+				'invoiceLineId' => $this->getLineIdCovering($charge, $amount),
 			]));
 		});
 	}
 
 	/**
-	 * Follow a change to a charged order’s total, so what is owed matches the order.
+	 * Follow a change to a charged order’s total, so what is owed matches the order. A lowered total comes off the charge’s invoice line when that line’s balance covers it.
 	 *
 	 * @param int|null $authorId the staff member who edited the order, since the queue job that calls this runs with no signed-in user
 	 * @throws LedgerException if the account is locked by another request
@@ -365,6 +357,7 @@ class Ledger extends Component
 			'amount' => $difference,
 			'orderId' => $charge->orderId,
 			'transactionHash' => $transactionHash,
+			'invoiceLineId' => $difference->isNegative() ? $this->getLineIdCovering($charge, $difference->negative()) : null,
 			'authorId' => $authorId,
 		]));
 	}
@@ -490,6 +483,19 @@ class Ledger extends Component
 		$this->triggerCommittedEntryEvents();
 
 		return $result;
+	}
+
+	/**
+	 * The charge’s invoice line, when that line’s balance covers the credit.
+	 */
+	private function getLineIdCovering(Entry $charge, Money $credit): ?int
+	{
+		$line = $charge->invoiceLineId !== null ? Plugin::getInstance()->getInvoices()->getLineById($charge->invoiceLineId) : null;
+
+		// Leave the credit uninvoiced when it exceeds the line's balance, so the balance never goes negative
+		return $line instanceof InvoiceLine && Plugin::getInstance()->getInvoices()->getLineBalance($line)->greaterThanOrEqual($credit)
+			? $line->id
+			: null;
 	}
 
 	/**

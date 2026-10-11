@@ -6,20 +6,25 @@ namespace fostercommerce\netterms\controllers;
 
 use Craft;
 use craft\commerce\elements\Order;
+use craft\errors\MutexException;
+use craft\helpers\DateTimeHelper;
 use craft\web\Controller;
 use craft\web\twig\variables\Paginate;
 use fostercommerce\netterms\enums\Billing;
 use fostercommerce\netterms\errors\LedgerException;
+use fostercommerce\netterms\helpers\Amounts;
+use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Application;
 use fostercommerce\netterms\models\Entry;
 use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\Plugin;
+use yii\web\BadRequestHttpException;
 use yii\web\ForbiddenHttpException;
 use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
- * Lists, issues, voids and sends invoices, and changes their payment terms, in the control panel.
+ * Lists, drafts, issues, voids and sends invoices, and changes their payment terms and notes, in the control panel.
  */
 class InvoicesController extends Controller
 {
@@ -36,12 +41,12 @@ class InvoicesController extends Controller
 		$this->requireCpRequest();
 		$this->requirePermission('accessPlugin-' . Plugin::HANDLE);
 
-		if (! in_array($action->id, ['index', 'view'], true)) {
+		if (! in_array($action->id, ['index', 'view', 'pdf'], true)) {
 			$this->requirePermission(Plugin::PERMISSION_MANAGE_PAYMENTS);
 		}
 
-		// Refuse to issue in order billing. Invoices issued before a switch stay viewable.
-		if ($action->id === 'issue' && Plugin::getInstance()->getBilling() !== Billing::Invoices) {
+		// Refuse new invoices in order billing. Invoices issued before a switch stay viewable.
+		if (in_array($action->id, ['edit', 'save'], true) && Plugin::getInstance()->getBilling() !== Billing::Invoices) {
 			throw new ForbiddenHttpException(Craft::t(Plugin::HANDLE, 'error.invoiceBillingOnly'));
 		}
 
@@ -58,10 +63,15 @@ class InvoicesController extends Controller
 		]);
 	}
 
-	public function actionView(int $invoiceId): Response
+	public function actionView(int $invoiceId, ?Invoice $invoice = null): Response
 	{
 		$plugin = Plugin::getInstance();
-		$invoice = $this->getInvoice($invoiceId);
+		$invoice ??= $this->getInvoice($invoiceId);
+
+		if ($invoice->getIsDraft()) {
+			return $this->actionEdit($invoiceId, $invoice);
+		}
+
 		$currency = $invoice->getAccount()->getCurrency();
 		$lines = $invoice->getLines();
 
@@ -94,33 +104,169 @@ class InvoicesController extends Controller
 		]);
 	}
 
-	public function actionIssue(): ?Response
+	/**
+	 * The New invoice page, and the page of a draft. An `accountId` query param presets the account and opens its draft if it has one.
+	 */
+	public function actionEdit(?int $invoiceId = null, ?Invoice $invoice = null): Response
+	{
+		$plugin = Plugin::getInstance();
+		$accounts = $plugin->getAccounts();
+		$invoices = $plugin->getInvoices();
+
+		if (! $invoice instanceof Invoice && $invoiceId !== null) {
+			$invoice = $this->getInvoice($invoiceId);
+		}
+
+		if (! $invoice instanceof Invoice) {
+			$accountId = $this->request->getQueryParam('accountId');
+			$account = is_numeric($accountId) ? $accounts->getAccountById((int) $accountId) : null;
+			$draft = $account instanceof Account ? $invoices->getDraftByAccountId((int) $account->id) : null;
+
+			if ($draft instanceof Invoice) {
+				return $this->redirect($draft->getCpEditUrl());
+			}
+
+			$invoice = new Invoice([
+				'accountId' => $account?->id,
+				'dateDue' => $account instanceof Account ? DateTimeHelper::today()->modify('+' . $account->getEffectivePaymentTerms() . ' days') : null,
+			]);
+		}
+
+		$account = $invoice->accountId !== null ? $accounts->getAccountById($invoice->accountId) : null;
+
+		$accountOptions = [];
+		if ($invoice->id === null) {
+			foreach ($accounts->getAllAccounts() as $candidate) {
+				$billable = $invoices->getBillableTotal($candidate);
+				if ($billable->isPositive() || $candidate->id === $account?->id) {
+					$accountOptions[] = [
+						'label' => Craft::t(Plugin::HANDLE, 'invoice.accountOption', [
+							'name' => $candidate->getHolder()?->getName(),
+							'amount' => Amounts::toString($billable),
+						]),
+						'value' => $candidate->id,
+					];
+				}
+			}
+		}
+
+		$billableLines = [];
+		$billableByBuyerId = $account instanceof Account ? $invoices->getBillableByBuyerId($account) : [];
+		foreach ($billableByBuyerId as $buyerId => $amount) {
+			$billableLines[] = [
+				'name' => $buyerId !== 0 ? $accounts->getBuyerById($buyerId)?->getName() : Craft::t(Plugin::HANDLE, 'ledger.account'),
+				'amount' => $amount,
+			];
+		}
+
+		$invoiceEmail = $plugin->getEmails()->getInvoiceEmail();
+
+		return $this->renderTemplate('net-terms/invoices/_edit', [
+			'invoice' => $invoice,
+			'account' => $account,
+			'accountOptions' => $accountOptions,
+			'billableLines' => $billableLines,
+			'billableTotal' => $account instanceof Account ? $invoices->getBillableTotal($account) : null,
+			'invoiceNumber' => $invoice->number ?? $invoices->getNextInvoiceNumber(),
+			'invoiceEmail' => $invoiceEmail?->enabled ? $invoiceEmail : null,
+			'canManagePayments' => Craft::$app->getUser()->checkPermission(Plugin::PERMISSION_MANAGE_PAYMENTS),
+		]);
+	}
+
+	/**
+	 * Save a draft, issue it, or issue and email it, as the posted `intent` says: `draft`, `issue` or `send`.
+	 */
+	public function actionSave(): ?Response
 	{
 		$this->requirePostRequest();
 
 		$plugin = Plugin::getInstance();
-		$account = $this->requireAccountParam();
+		$invoices = $plugin->getInvoices();
+		$invoiceId = $this->getIdParam('invoiceId');
+		$invoice = $invoiceId !== null ? $this->getInvoice($invoiceId) : new Invoice([
+			'accountId' => $this->getIdParam('accountId'),
+		]);
 
-		try {
-			$invoice = $plugin->getInvoices()->issueInvoice($account);
-		} catch (LedgerException $ledgerException) {
-			return $this->asFailure($ledgerException->getMessage());
+		if (! $invoice->getIsDraft()) {
+			throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'invoice.alreadyIssued'));
 		}
 
-		if (! $invoice instanceof Invoice) {
-			return $this->asFailure(Craft::t(Plugin::HANDLE, 'invoice.nothingToInvoice'));
+		$dateDue = $this->request->getBodyParam('dateDue');
+		$invoice->dateDue = is_array($dateDue) || is_string($dateDue) ? (DateTimeHelper::toDateTime($dateDue) ?: null) : null;
+
+		$invoice->notes = $this->getOptionalTextParam('notes');
+		$intent = $this->request->getBodyParam('intent');
+
+		try {
+			if ($intent === 'draft') {
+				if (! $invoices->saveDraft($invoice)) {
+					return $this->asModelFailure($invoice, Craft::t(Plugin::HANDLE, 'invoice.couldNotSaveDraft'), 'invoice');
+				}
+
+				return $this->asModelSuccess($invoice, Craft::t(Plugin::HANDLE, 'invoice.draftSaved'), 'invoice', [], $invoice->getCpEditUrl());
+			}
+
+			$issuedInvoice = $invoice->validate() ? $invoices->issueInvoice($invoice->getAccount(), null, $invoice) : null;
+		} catch (LedgerException $ledgerException) {
+			return $this->asFailure($ledgerException->getMessage());
+		} catch (MutexException) {
+			return $this->asFailure(Craft::t(Plugin::HANDLE, 'invoice.numberBusy'));
+		}
+
+		if (! $issuedInvoice instanceof Invoice) {
+			if (! $invoice->hasErrors()) {
+				$invoice->addError('accountId', Craft::t(Plugin::HANDLE, 'invoice.nothingToInvoice'));
+			}
+
+			return $this->asModelFailure($invoice, Craft::t(Plugin::HANDLE, 'invoice.couldNotIssue'), 'invoice');
 		}
 
 		$messageKey = 'invoice.issued';
-		if ((bool) $this->request->getBodyParam('send')) {
-			$messageKey = $plugin->getInvoices()->sendInvoice($invoice) ? 'invoice.issuedAndSent' : 'invoice.issuedNotSent';
+		if ($intent === 'send') {
+			$messageKey = $invoices->sendInvoice($issuedInvoice) ? 'invoice.issuedAndSent' : 'invoice.issuedNotSent';
 		}
 
 		return $this->asSuccess(Craft::t(Plugin::HANDLE, $messageKey, [
-			'number' => $invoice->number,
+			'number' => $issuedInvoice->number,
 		]), [
-			'invoiceId' => $invoice->id,
-		], $invoice->getCpEditUrl());
+			'invoiceId' => $issuedInvoice->id,
+		], $issuedInvoice->getCpEditUrl());
+	}
+
+	public function actionDeleteDraft(): ?Response
+	{
+		$this->requirePostRequest();
+
+		$invoice = $this->getInvoice($this->requireIdParam('invoiceId'));
+
+		if (! Plugin::getInstance()->getInvoices()->deleteDraft($invoice)) {
+			return $this->asFailure(Craft::t(Plugin::HANDLE, 'invoice.couldNotDeleteDraft'));
+		}
+
+		return $this->asSuccess(Craft::t(Plugin::HANDLE, 'invoice.draftDeleted'), [], 'net-terms/invoices');
+	}
+
+	public function actionNotesModal(): Response
+	{
+		$invoice = $this->getInvoice($this->requireQueryIdParam('invoiceId'));
+
+		return $this->asCpModal()
+			->action('net-terms/invoices/save-notes')
+			->submitButtonLabel(Craft::t(Plugin::HANDLE, 'invoice.saveNotes'))
+			->contentTemplate('net-terms/invoices/_notes-modal', [
+				'invoice' => $invoice,
+			]);
+	}
+
+	public function actionSaveNotes(): ?Response
+	{
+		$this->requirePostRequest();
+		$this->requireAcceptsJson();
+
+		$invoice = $this->getInvoice($this->requireIdParam('invoiceId'));
+		Plugin::getInstance()->getInvoices()->saveNotes($invoice, $this->getOptionalTextParam('notes'));
+
+		return $this->asSuccess(Craft::t(Plugin::HANDLE, 'invoice.notesSaved'));
 	}
 
 	public function actionVoid(): ?Response
@@ -182,6 +328,17 @@ class InvoicesController extends Controller
 		}
 
 		return $this->asSuccess(Craft::t(Plugin::HANDLE, 'invoice.sent'));
+	}
+
+	public function actionPdf(): Response
+	{
+		$invoice = $this->getInvoice($this->requireQueryIdParam('invoiceId'));
+		$pdf = Plugin::getInstance()->getInvoices()->renderPdf($invoice);
+
+		return $this->response->sendContentAsFile($pdf['content'], $pdf['fileName'], [
+			'inline' => true,
+			'mimeType' => 'application/pdf',
+		]);
 	}
 
 	private function getInvoice(int $invoiceId): Invoice

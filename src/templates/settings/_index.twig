@@ -1,0 +1,19 @@
+{% extends '_layouts/cp' %}
+
+{% set selectedSubnavItem = 'settings' %}
+{% set title = 'nav.settings'|t('net-terms') %}
+{% set fullPageForm = not readOnly %}
+
+{% if readOnly %}
+	{% set contentNotice = readOnlyNotice() %}
+{% endif %}
+
+{% block content %}
+	{% if not readOnly %}
+		{{ actionInput('plugins/save-plugin-settings') }}
+		{{ hiddenInput('pluginHandle', 'net-terms') }}
+		{{ redirectInput('net-terms/settings') }}
+	{% endif %}
+
+	{{ settingsHtml|raw }}
+{% endblock %}

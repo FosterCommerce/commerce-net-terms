@@ -13,13 +13,15 @@
 ] %}
 
 {% block actionButton %}
-	{% if canManagePayments and not invoice.getIsVoided() %}
-		<div class="buttons">
+	<div class="buttons">
+		<a class="btn" href="{{ actionUrl('net-terms/invoices/pdf', { invoiceId: invoice.id }) }}" target="_blank">{{ 'invoice.downloadPdf'|t('net-terms') }}</a>
+		{% if canManagePayments and not invoice.getIsVoided() %}
+			<button type="button" class="btn" data-nt-modal="net-terms/invoices/notes-modal" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}">{{ 'invoice.editNotes'|t('net-terms') }}</button>
 			<button type="button" class="btn" data-nt-modal="net-terms/invoices/terms-modal" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}">{{ 'invoice.changeTerms'|t('net-terms') }}</button>
 			<button type="button" class="btn" data-nt-action="net-terms/invoices/send" data-nt-params="{{ { invoiceId: invoice.id }|json_encode }}">{{ 'invoice.send'|t('net-terms') }}</button>
 			<a class="btn submit" href="{{ url('net-terms/payments/new', { accountId: account.id }) }}">{{ 'payment.record'|t('net-terms') }}</a>
-		</div>
-	{% endif %}
+		{% endif %}
+	</div>
 {% endblock %}
 
 {% block content %}
@@ -49,6 +51,15 @@
 			<span class="nt-stat-value">{{ figures.balance|money }}</span>
 		</div>
 	</div>
+
+	{% if invoice.notes %}
+		<div class="nt-section">
+			<div class="nt-section-header">
+				<h2>{{ 'invoice.notes'|t('net-terms') }}</h2>
+			</div>
+			<p>{{ invoice.notes|nl2br }}</p>
+		</div>
+	{% endif %}
 
 	{% for line in lines %}
 		{% set buyer = line.getBuyer() %}

@@ -18,6 +18,8 @@ use fostercommerce\netterms\db\Table;
  * @property string $amount
  * @property string|null $dateReversed
  * @property int|null $authorId
+ * @property string $dateCreated
+ * @property string $dateUpdated
  */
 class ApplicationRecord extends ActiveRecord
 {

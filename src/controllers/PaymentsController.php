@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace fostercommerce\netterms\controllers;
 
 use Craft;
+use craft\commerce\errors\TransactionException;
 use craft\commerce\Plugin as Commerce;
 use craft\elements\User;
 use craft\helpers\DateTimeHelper;
@@ -120,7 +121,7 @@ class PaymentsController extends Controller
 		try {
 			$payment->amount = Amounts::fromPostedInput($this->request->getBodyParam('amount'), $account->getCurrency()) ?? $payment->amount;
 			$recorded = $plugin->getPayments()->recordPayment($payment, $this->getAllocationsParam($account));
-		} catch (InvalidAmountException|LedgerException $userException) {
+		} catch (InvalidAmountException|LedgerException|TransactionException $userException) {
 			$payment->addError('amount', $userException->getMessage());
 			$recorded = false;
 		}
@@ -168,7 +169,7 @@ class PaymentsController extends Controller
 			}
 
 			$plugin->getPayments()->applyAllocations($payment, $allocations);
-		} catch (InvalidAmountException|LedgerException $userException) {
+		} catch (InvalidAmountException|LedgerException|TransactionException $userException) {
 			return $this->asFailure($userException->getMessage());
 		}
 
@@ -187,8 +188,8 @@ class PaymentsController extends Controller
 
 		try {
 			Plugin::getInstance()->getPayments()->reverseApplication($application);
-		} catch (LedgerException $ledgerException) {
-			return $this->asFailure($ledgerException->getMessage());
+		} catch (LedgerException|TransactionException $userException) {
+			return $this->asFailure($userException->getMessage());
 		}
 
 		return $this->asSuccess(Craft::t(Plugin::HANDLE, 'application.reversed'));

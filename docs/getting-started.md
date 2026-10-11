@@ -19,7 +19,7 @@ composer require fostercommerce/commerce-net-terms
 
 ## 3. Configure
 
-Go to **Settings -> Plugins -> Net Terms**. Once you build a storefront invoice page, set **Storefront invoice path** so invoice emails link to it. For every setting, see [configuration](./reference/configuration.md).
+Go to **Net Terms -> Settings**. Once you build a storefront invoice page, set **Storefront invoice path** so invoice emails link to it. For every setting, see [configuration](./reference/configuration.md).
 
 ## 4. Add the gateway
 
@@ -38,7 +38,7 @@ Go to **Net Terms -> Accounts -> New account**.
 
 1. Choose the **Account holder**: the customer the account belongs to. The holder becomes the account's first buyer.
 2. Enter the **Credit limit**.
-3. Leave **Sublimits** and **Payment terms** on their defaults.
+3. Leave **Protect sublimits** and **Payment terms** on their defaults.
 4. Click **Save**.
 
 ## 6. Add a buyer
@@ -49,11 +49,11 @@ Only buyers can charge orders to an account, and the holder already is one. To l
 
 ## 7. Charge an order
 
-Sign in to the storefront as the buyer and check out. Commerce lists the gateway with your other payment methods under the name you gave it, with the buyer's available credit. Choose it and pay. The order is paid in full, and the account's **Owed** figure rises by the order total.
+Sign in to the storefront as the buyer and check out. Commerce lists the gateway with your other payment methods under the name you gave it. Choose it. The payment form shows the buyer's available credit. Click **Charge to account**. The order is paid in full, and the account's **Owed** figure rises by the order total.
 
 ## 8. Issue an invoice
 
-On the account's **Invoices** tab, click **Issue and email**. The invoice bills every charge not yet invoiced, with one line per buyer, and the holder receives the invoice email.
+On the account's **Invoices** tab, click **New invoice**, then **Save and send**. The invoice bills every charge not yet invoiced, with one line per buyer, and Net Terms sends the invoice email.
 
 ![An issued invoice](../resources/img/invoice-view.png)
 
@@ -61,6 +61,6 @@ On the account's **Invoices** tab, click **Issue and email**. The invoice bills 
 
 - [Accounts and buyers](./user-guide/accounts-and-buyers.md), sublimits and how Net Terms works out available credit
 - [Payments](./user-guide/payments.md), recording a check and applying it to invoices
-- [Reminders](./user-guide/reminders.md), emailing customers before and after a due date
+- [Reminders and emails](./user-guide/reminders.md), the invoice email and reminders before and after a due date
 - [Storefront templates](./dev-guide/storefront-templates.md), building the account and invoice pages
 - [Company accounts](./dev-guide/company-accounts.md), when orders belong to a company rather than the person who places them

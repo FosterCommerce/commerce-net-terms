@@ -12,6 +12,8 @@ use fostercommerce\netterms\db\Table;
  *
  * @property int $id
  * @property string $type
+ * @property int $days
+ * @property int|null $emailId
  * @property int|null $invoiceId
  * @property int|null $orderId
  */

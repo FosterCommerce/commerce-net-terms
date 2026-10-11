@@ -8,6 +8,7 @@ use Craft;
 use craft\commerce\elements\Order;
 use craft\commerce\Plugin as Commerce;
 use craft\elements\User;
+use craft\helpers\UrlHelper;
 use DateTime;
 use fostercommerce\netterms\enums\Billing;
 use fostercommerce\netterms\enums\InvoiceStatus;
@@ -116,6 +117,20 @@ class NetTermsVariable
 		return $this->canView($account) ? Plugin::getInstance()->getInvoices()->getInvoicesByAccountId((int) $account->id) : [];
 	}
 
+	/**
+	 * A link that downloads the invoice PDF, or null when the user can't see the invoice.
+	 */
+	public function getInvoicePdfUrl(Invoice $invoice): ?string
+	{
+		if (! $this->canView($invoice->getAccount())) {
+			return null;
+		}
+
+		return UrlHelper::actionUrl('net-terms/storefront/invoice-pdf', [
+			'number' => $invoice->number,
+		]);
+	}
+
 	public function getInvoiceByNumber(string $number): ?Invoice
 	{
 		$invoice = Plugin::getInstance()->getInvoices()->getInvoiceByNumber($number);
@@ -217,11 +232,7 @@ class NetTermsVariable
 			return false;
 		}
 
-		$accounts = Plugin::getInstance()->getAccounts();
-
-		return $account->holderId === $currentUser->id
-			|| $accounts->getBuyer($account, (int) $currentUser->id)?->active === true
-			|| $accounts->canManage($account, $currentUser);
+		return Plugin::getInstance()->getAccounts()->canView($account, $currentUser);
 	}
 
 	private function canViewOrder(Order $order): bool

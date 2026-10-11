@@ -18,6 +18,7 @@ use fostercommerce\netterms\enums\SublimitMode;
 use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\events\DefineAccountAccessEvent;
 use fostercommerce\netterms\events\DefineBuyerEligibilityEvent;
+use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
 use fostercommerce\netterms\events\ResolveBuyerEvent;
 use fostercommerce\netterms\events\ResolveHolderEvent;
 use fostercommerce\netterms\helpers\Amounts;
@@ -99,6 +100,22 @@ class Accounts extends Component
 	 * ```
 	 */
 	public const EVENT_DEFINE_BUYER_ELIGIBILITY = 'defineBuyerEligibility';
+
+	/**
+	 * The event that is triggered when an account is created, to decide whether the user can hold one.
+	 *
+	 * ```php
+	 * use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
+	 * use fostercommerce\netterms\services\Accounts;
+	 * use yii\base\Event;
+	 *
+	 * Event::on(Accounts::class, Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY, function(DefineHolderEligibilityEvent $event) {
+	 *     // Only companies hold accounts
+	 *     $event->isEligible = MyCompanies::isCompanyUser($event->user);
+	 * });
+	 * ```
+	 */
+	public const EVENT_DEFINE_HOLDER_ELIGIBILITY = 'defineHolderEligibility';
 
 	/**
 	 * @var array<int, Account|null>
@@ -410,9 +427,7 @@ class Accounts extends Component
 	{
 		$availableByBuyerId = $this->getAvailableCreditByBuyerId($buyer->getAccount());
 
-		return array_key_exists((int) $buyer->id, $availableByBuyerId)
-			? $availableByBuyerId[(int) $buyer->id]
-			: Amounts::zero($buyer->getAccount()->getCurrency());
+		return $availableByBuyerId[(int) $buyer->id];
 	}
 
 	/**
@@ -644,6 +659,29 @@ class Accounts extends Component
 	}
 
 	/**
+	 * Whether the user can see the account on the storefront: its holder, an active buyer on it, or someone who manages it.
+	 */
+	public function canView(Account $account, User $user): bool
+	{
+		return $account->holderId === $user->id
+			|| $this->getBuyer($account, (int) $user->id)?->active === true
+			|| $this->canManage($account, $user);
+	}
+
+	/**
+	 * Whether the user can hold a new account.
+	 */
+	public function canBeHolder(User $user): bool
+	{
+		$event = new DefineHolderEligibilityEvent([
+			'user' => $user,
+		]);
+		$this->trigger(self::EVENT_DEFINE_HOLDER_ELIGIBILITY, $event);
+
+		return $event->isEligible;
+	}
+
+	/**
 	 * Whether the storefront can add the user as a buyer on the account.
 	 */
 	public function canBeBuyer(Account $account, User $user): bool
@@ -693,6 +731,13 @@ class Accounts extends Component
 		$existing = $this->getAccountByHolder((int) $account->storeId, (int) $account->holderId);
 		if ($existing instanceof Account) {
 			$account->addError('holderId', Craft::t(Plugin::HANDLE, 'account.holderHasAccount'));
+
+			return false;
+		}
+
+		$holder = $account->getHolder();
+		if ($holder instanceof User && ! $this->canBeHolder($holder)) {
+			$account->addError('holderId', Craft::t(Plugin::HANDLE, 'account.holderNotEligible'));
 
 			return false;
 		}

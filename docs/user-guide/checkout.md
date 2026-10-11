@@ -26,10 +26,10 @@ What happens to the order depends on the gateway's payment type:
 
 ## Changes to a paid order
 
-In invoice billing, when a completed credit order's total changes, a queue job settles the change on the order and the ledger. The order stays paid, and the change goes on the account's next invoice.
+In invoice billing, when the total of a completed order charged to an account changes, a queue job settles the change on the order and the ledger. The order stays paid.
 
-- **The total rises.** The job adds a Net Terms purchase to the order and a charge to the ledger. It charges only what the order still owes, so a payment taken in the meantime covers the rest.
-- **The total falls.** The job refunds only what the order is overpaid, and doesn't refund again what you refunded before the edit. It refunds the newest Net Terms purchase first, each up to what it can still refund, and adds an **Order changed** entry to the ledger for each refund.
+- **The total rises.** The job adds a Net Terms purchase to the order and a charge to the ledger. It charges only what the order still owes, so a payment taken in the meantime covers the rest. The charge goes on the account's next invoice.
+- **The total falls.** The job refunds only what the order is overpaid, and doesn't refund again what you refunded before the edit. It refunds the newest Net Terms purchase first, each up to what it can still refund, and adds an **Order changed** entry to the ledger for each refund. If the order's charge is already on an invoice, the entry comes off that invoice line when the line's balance covers it. Otherwise it goes on the next invoice.
 
 A refund you give without editing the order takes the amount off what the buyer owes.
 

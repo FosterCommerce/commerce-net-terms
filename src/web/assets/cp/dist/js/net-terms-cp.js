@@ -62,26 +62,28 @@
 	// Read and write money inputs in each field's own locale, since they show localized numbers
 	const localeOf = (input) => input.closest('.money-container, .flex, td, .field')?.querySelector('input[name$="[locale]"]')?.value || document.documentElement.lang || 'en-US';
 
+	// Count money in the currency's minor units, since summing floats gains rounding errors
+	const currencyCode = () => document.querySelector('[data-nt-currency]').dataset.ntCurrency;
+	const fractionDigits = () => new Intl.NumberFormat('en', {style: 'currency', currency: currencyCode()}).resolvedOptions().maximumFractionDigits;
+	const toMinorUnits = (amount) => Math.round(amount * 10 ** fractionDigits());
+	const fromMinorUnits = (minorUnits) => minorUnits / 10 ** fractionDigits();
+
 	const readAmount = (input) => {
 		if (!input || input.value.trim() === '') {
 			return 0;
 		}
 
-		const parts = new Intl.NumberFormat(localeOf(input)).formatToParts(1000.1);
-		const group = parts.find((part) => part.type === 'group')?.value ?? ',';
+		// Format a seven-digit number, since locales such as es and pl don't group four digits
+		const parts = new Intl.NumberFormat(localeOf(input)).formatToParts(1000000.1);
+		const group = parts.find((part) => part.type === 'group')?.value ?? '';
 		const decimal = parts.find((part) => part.type === 'decimal')?.value ?? '.';
 		const amount = parseFloat(input.value.split(group).join('').replace(decimal, '.'));
 
-		return Number.isNaN(amount) ? 0 : amount;
+		return Number.isNaN(amount) ? 0 : toMinorUnits(amount);
 	};
 
-	// Round to the payment currency's minor unit, since a store's currency may have zero or three decimals
-	const currencyCode = () => document.querySelector('[data-nt-currency]').dataset.ntCurrency;
-	const fractionDigits = () => new Intl.NumberFormat('en', {style: 'currency', currency: currencyCode()}).resolvedOptions().maximumFractionDigits;
-	const roundToMinorUnit = (amount) => Math.round(amount * 10 ** fractionDigits()) / 10 ** fractionDigits();
-
-	const writeAmount = (input, amount) => {
-		input.value = amount > 0 ? new Intl.NumberFormat(localeOf(input), {minimumFractionDigits: fractionDigits(), maximumFractionDigits: fractionDigits()}).format(amount) : '';
+	const writeAmount = (input, minorUnits) => {
+		input.value = minorUnits > 0 ? new Intl.NumberFormat(localeOf(input), {minimumFractionDigits: fractionDigits(), maximumFractionDigits: fractionDigits()}).format(fromMinorUnits(minorUnits)) : '';
 		// Restyle the field ourselves, since a value set from script skips the money field's own placeholder styling
 		input.classList.toggle('money-placeholder', input.value === '');
 		input.closest('.money-container')?.querySelector('.clear-btn')?.classList.toggle('hidden', input.value === '');
@@ -100,22 +102,24 @@
 
 		const received = readAmount(document.querySelector('#amount'));
 		const applied = [...document.querySelectorAll('[data-nt-target]')].reduce((total, row) => total + readAmount(amountInputOf(row)), 0);
-		const format = (amount) => new Intl.NumberFormat(localeOf(document.querySelector('#amount')), {style: 'currency', currency: currencyCode()}).format(amount);
+		const format = (minorUnits) => new Intl.NumberFormat(localeOf(document.querySelector('#amount')), {style: 'currency', currency: currencyCode()}).format(fromMinorUnits(minorUnits));
 
 		summary.querySelector('[data-nt-summary-received]').textContent = format(received);
 		summary.querySelector('[data-nt-summary-applied]').textContent = format(applied);
 		summary.querySelector('[data-nt-summary-unapplied]').textContent = format(Math.max(received - applied, 0));
-		summary.querySelector('[data-nt-summary-over]').classList.toggle('hidden', roundToMinorUnit(applied) <= roundToMinorUnit(received));
+		summary.querySelector('[data-nt-summary-over]').classList.toggle('hidden', applied <= received);
 	};
 
-	// Spread an amount across the open items in their listed order, oldest due first
-	const allocate = (amount) => {
-		let remaining = amount;
+	const balanceOf = (row) => toMinorUnits(parseFloat(row.dataset.ntBalance));
+
+	// Spread an amount across the open items in their listed order
+	const allocate = (minorUnits) => {
+		let remaining = minorUnits;
 
 		document.querySelectorAll('[data-nt-target]').forEach((row) => {
-			const share = Math.min(parseFloat(row.dataset.ntBalance), remaining);
-			writeAmount(amountInputOf(row), roundToMinorUnit(share));
-			remaining = roundToMinorUnit(remaining - share);
+			const share = Math.min(balanceOf(row), remaining);
+			writeAmount(amountInputOf(row), share);
+			remaining -= share;
 		});
 	};
 
@@ -125,7 +129,7 @@
 
 		if (payInFull) {
 			const row = payInFull.closest('[data-nt-target]');
-			writeAmount(amountInputOf(row), parseFloat(row.dataset.ntBalance));
+			writeAmount(amountInputOf(row), balanceOf(row));
 			updateSummary();
 		}
 
@@ -139,7 +143,7 @@
 		const receivedFull = event.target.closest('[data-nt-received-full]');
 
 		if (receivedFull?.checked) {
-			const total = parseFloat(receivedFull.dataset.ntReceivedFull);
+			const total = toMinorUnits(parseFloat(receivedFull.dataset.ntReceivedFull));
 			writeAmount(document.querySelector('#amount'), total);
 			allocate(total);
 		}

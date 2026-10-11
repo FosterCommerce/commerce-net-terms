@@ -17,6 +17,8 @@ use fostercommerce\netterms\db\Table;
  * @property string|null $sublimitMode
  * @property int|null $paymentTerms
  * @property string $status
+ * @property string $dateCreated
+ * @property string $dateUpdated
  */
 class AccountRecord extends ActiveRecord
 {

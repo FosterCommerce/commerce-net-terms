@@ -2,8 +2,6 @@
 
 # Net Terms
 
-Give business customers a credit limit to buy now and pay their invoice later on set terms.
-
 Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
 
 ## Overview
@@ -12,7 +10,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 - Control spending per person: give each buyer a sublimit (an office manager can owe up to $2,000), set by your staff, or by the company's own admins from storefront templates you build.
 - Keep receivables in Craft: invoice each account with one line per buyer, or bill by the orders themselves, leaving each one unpaid under a label like "Pay via check/ACH" for the customer to pay later, online or by check.
 - Apply each check, ACH, wire or card payment the way the remittance says, split across the invoices or orders it covers.
-- Get paid without chasing: Net Terms emails each customer before an invoice or order is due and again once it's overdue, from one daily console command, with the emails editable in Craft's System Messages.
+- Get paid without chasing: Net Terms emails each customer on the days you choose before an invoice or order is due and after it's overdue, from one daily console command.
 - Add net terms to the company setup you already have: a site module can set which company's account an order charges.
 
 ## How it works
@@ -35,6 +33,7 @@ composer require fostercommerce/commerce-net-terms
 ## Documentation
 
 - [Getting started](https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs/getting-started), from install to a first invoice for an order charged to an account
+- [Upgrading](https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs/upgrade), from an earlier version
 - [Accounts and buyers](https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs/user-guide/accounts-and-buyers), credit limits, sublimits, and how available credit is worked out
 - [Billing by order](https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs/user-guide/order-billing), leaving orders unpaid and recording payments against them
 - [Payments](https://www.fostercommerce.com/craft-cms-plugins/net-terms/docs/user-guide/payments), recording money received and applying it to invoices or orders

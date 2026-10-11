@@ -1,0 +1,129 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'invoices' %}
+{% set isNew = not invoice.id %}
+{% set readOnly = not canManagePayments %}
+{% set fullPageForm = not readOnly %}
+{% set title = isNew ? 'invoice.new'|t('net-terms') : 'invoice.title'|t('net-terms', { number: invoice.number }) %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.invoices'|t('net-terms'), url: url('net-terms/invoices') },
+] %}
+
+{% set submitButtonLabel = invoiceEmail ? 'invoice.saveAndSend'|t('net-terms') : 'invoice.issue'|t('net-terms') %}
+{% set formActions = [
+	{ label: 'invoice.saveDraft'|t('net-terms'), params: { intent: 'draft' } },
+	invoiceEmail ? { label: 'invoice.issueWithoutSending'|t('net-terms'), params: { intent: 'issue' } },
+	not isNew ? {
+		label: 'invoice.deleteDraft'|t('net-terms'),
+		action: 'net-terms/invoices/delete-draft',
+		redirect: 'net-terms/invoices'|hash,
+		confirm: 'invoice.deleteDraftConfirm'|t('net-terms'),
+		destructive: true,
+	},
+]|filter %}
+
+{% block content %}
+	{{ actionInput('net-terms/invoices/save') }}
+	{{ hiddenInput('intent', invoiceEmail ? 'send' : 'issue') }}
+	{% if invoice.id %}{{ hiddenInput('invoiceId', invoice.id) }}{% endif %}
+
+	{% if isNew %}
+		{% if not account and not accountOptions %}
+			<p class="zilch">{{ 'invoice.nothingToInvoiceAnywhere'|t('net-terms') }}</p>
+		{% else %}
+			{{ forms.selectField({
+				first: true,
+				label: 'invoice.account'|t('net-terms'),
+				instructions: 'invoice.accountInstructions'|t('net-terms'),
+				id: 'accountId',
+				name: 'accountId',
+				options: account ? accountOptions : [{ label: 'invoice.chooseAccount'|t('net-terms'), value: '' }]|merge(accountOptions),
+				value: account.id ?? '',
+				required: true,
+				errors: invoice.getErrors('accountId'),
+			}) }}
+			{% js %}
+				$('#accountId').on('change', function() {
+					window.location.href = Craft.getCpUrl('net-terms/invoices/new', this.value ? { accountId: this.value } : {});
+				});
+			{% endjs %}
+		{% endif %}
+	{% else %}
+		{% embed '_includes/forms/field' with {
+			first: true,
+			label: 'invoice.account'|t('net-terms'),
+			errors: invoice.getErrors('accountId'),
+		} %}
+			{% block input %}<p><a href="{{ account.cpEditUrl }}">{{ account.getHolder().name }}</a></p>{% endblock %}
+		{% endembed %}
+	{% endif %}
+
+	{% if account %}
+		{% embed '_includes/forms/field' with {
+			label: 'invoice.number'|t('net-terms'),
+			instructions: isNew ? 'invoice.numberInstructions'|t('net-terms'),
+		} %}
+			{% block input %}<p>{{ invoiceNumber }}</p>{% endblock %}
+		{% endembed %}
+
+		{% embed '_includes/forms/field' with {
+			label: 'invoice.dateIssued'|t('net-terms'),
+			instructions: 'invoice.dateIssuedInstructions'|t('net-terms'),
+		} %}
+			{% block input %}<p>{{ now|date('short') }}</p>{% endblock %}
+		{% endembed %}
+
+		{{ forms.dateField({
+			label: 'invoice.dateDue'|t('net-terms'),
+			instructions: 'invoice.dateDueInstructions'|t('net-terms', { days: account.getEffectivePaymentTerms() }),
+			id: 'dateDue',
+			name: 'dateDue',
+			value: invoice.dateDue,
+			required: true,
+			errors: invoice.getErrors('dateDue'),
+			disabled: readOnly,
+		}) }}
+
+		{% embed '_includes/forms/field' with {
+			label: 'invoice.toBill'|t('net-terms'),
+			instructions: 'invoice.toBillInstructions'|t('net-terms'),
+		} %}
+			{% block input %}
+				{% if billableLines %}
+					<table class="data fullwidth">
+						<tbody>
+							{% for billableLine in billableLines %}
+								<tr>
+									<td>{{ billableLine.name }}</td>
+									<td class="nt-amount">{{ billableLine.amount|money }}</td>
+								</tr>
+							{% endfor %}
+						</tbody>
+						<tfoot>
+							<tr>
+								<th>{{ 'invoice.total'|t('net-terms') }}</th>
+								<th class="nt-amount">{{ billableTotal|money }}</th>
+							</tr>
+						</tfoot>
+					</table>
+				{% else %}
+					<p class="light">{{ 'invoice.nothingToInvoiceYet'|t('net-terms') }}</p>
+				{% endif %}
+			{% endblock %}
+		{% endembed %}
+
+		{{ forms.textareaField({
+			label: 'invoice.notes'|t('net-terms'),
+			instructions: 'invoice.notesInstructions'|t('net-terms'),
+			id: 'notes',
+			name: 'notes',
+			value: invoice.notes,
+			rows: 4,
+			errors: invoice.getErrors('notes'),
+			disabled: readOnly,
+		}) }}
+	{% endif %}
+{% endblock %}

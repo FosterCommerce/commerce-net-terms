@@ -15,7 +15,7 @@ class DefineBuyerEligibilityEvent extends Event
 	public User $user;
 
 	/**
-	 * @var bool Whether the storefront can add the user as a buyer on the account. Defaults to true.
+	 * @var bool Whether `net-terms/storefront/save-buyer` can add the user as a buyer on the account. Defaults to false.
 	 */
-	public bool $isEligible = true;
+	public bool $isEligible = false;
 }

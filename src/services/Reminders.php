@@ -7,91 +7,78 @@ namespace fostercommerce\netterms\services;
 use Craft;
 use craft\commerce\db\Table as CommerceTable;
 use craft\commerce\elements\Order;
+use craft\commerce\models\Email as CommerceEmail;
+use craft\commerce\Plugin as Commerce;
 use craft\db\Query;
-use craft\elements\User;
 use craft\helpers\Db;
-use craft\helpers\UrlHelper;
 use DateTime;
 use fostercommerce\netterms\db\Table;
 use fostercommerce\netterms\enums\Billing;
 use fostercommerce\netterms\enums\ReminderType;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
+use fostercommerce\netterms\models\Email;
 use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\Plugin;
 use fostercommerce\netterms\records\ReminderRecord;
-use Money\Money;
 use Throwable;
 use yii\base\Component;
 use yii\db\IntegrityException;
 
 /**
- * Emails reminders about invoices or credit orders that are due soon or overdue, once each.
+ * Emails reminders about invoices or orders that are due soon or overdue, once each.
  */
 class Reminders extends Component
 {
 	/**
-	 * System messages for the reminder emails.
-	 *
-	 * @return array<int, array{key: string, heading: string, subject: string, body: string}>
-	 */
-	public function getSystemMessages(): array
-	{
-		return [
-			[
-				'key' => ReminderType::DueSoon->messageKey(),
-				'heading' => Craft::t(Plugin::HANDLE, 'reminder.dueSoonHeading'),
-				'subject' => Craft::t(Plugin::HANDLE, 'reminder.dueSoonSubject'),
-				'body' => Craft::t(Plugin::HANDLE, 'reminder.dueSoonBody'),
-			],
-			[
-				'key' => ReminderType::Overdue->messageKey(),
-				'heading' => Craft::t(Plugin::HANDLE, 'reminder.overdueHeading'),
-				'subject' => Craft::t(Plugin::HANDLE, 'reminder.overdueSubject'),
-				'body' => Craft::t(Plugin::HANDLE, 'reminder.overdueBody'),
-			],
-		];
-	}
-
-	/**
-	 * Send each reminder whose moment, the due date less or plus the setting’s days, is after `$since` and by `$now`.
+	 * Send each enabled reminder whose moment, the due date less or plus the reminder’s days, is after `$windowStart` and by `$windowEnd`.
 	 *
 	 * @return array{sent: int, failed: int}
 	 */
-	public function sendReminders(DateTime $since, DateTime $now): array
+	public function sendReminders(DateTime $windowStart, DateTime $windowEnd): array
 	{
 		$plugin = Plugin::getInstance();
-		$settings = $plugin->getSettings();
-		$counts = [
-			'sent' => 0,
-			'failed' => 0,
-		];
+		$results = [];
 
-		foreach ([
-			[ReminderType::DueSoon, $settings->dueSoonReminderDays],
-			[ReminderType::Overdue, $settings->overdueReminderDays],
-		] as [$type, $days]) {
-			if ($days === null) {
-				continue;
+		if ($plugin->getBilling() === Billing::Orders) {
+			foreach ($plugin->getSettings()->reminders as $reminder) {
+				$emailUid = $reminder['emailUid'] ?? null;
+
+				if (! $reminder['enabled']) {
+					continue;
+				}
+
+				// Skip a row with no Commerce email chosen yet, rather than fail each order it covers
+				if ($emailUid === null) {
+					continue;
+				}
+
+				$results = [...$results, ...$this->sendOrderReminders(ReminderType::from($reminder['type']), (int) $reminder['days'], $emailUid, $windowStart, $windowEnd)];
 			}
-
-			$results = $plugin->getBilling() === Billing::Orders
-				? $this->sendOrderReminders($type, $days, $since, $now)
-				: $this->sendInvoiceReminders($type, $days, $since, $now);
-
-			foreach (array_filter($results, is_bool(...)) as $sent) {
-				++$counts[$sent ? 'sent' : 'failed'];
+		} else {
+			foreach ($plugin->getEmails()->getReminderEmails() as $email) {
+				if ($email->enabled) {
+					$results = [...$results, ...$this->sendInvoiceReminders($email, $windowStart, $windowEnd)];
+				}
 			}
 		}
 
-		return $counts;
+		$sentResults = array_filter($results, is_bool(...));
+		$sentCount = count(array_filter($sentResults));
+
+		return [
+			'sent' => $sentCount,
+			'failed' => count($sentResults) - $sentCount,
+		];
 	}
 
 	/**
 	 * @return array<int, bool|null> whether each reminder was sent, or null when another run claimed it
 	 */
-	private function sendInvoiceReminders(ReminderType $type, int $days, DateTime $since, DateTime $now): array
+	private function sendInvoiceReminders(Email $email, DateTime $windowStart, DateTime $windowEnd): array
 	{
+		$type = ReminderType::from($email->trigger->value);
+		$days = (int) $email->days;
 		$invoiceIds = (new Query())
 			->select(['invoices.id'])
 			->from([
@@ -103,15 +90,20 @@ class Reminders extends Component
 				'and',
 				'[[reminders.invoiceId]] = [[invoices.id]]',
 				[
+					'reminders.emailId' => $email->id,
 					'reminders.type' => $type->value,
+					'reminders.days' => $days,
 				],
 			])
 			->where([
 				'invoices.dateVoided' => null,
 				'reminders.id' => null,
 			])
-			->andWhere(['>', 'invoices.dateDue', Db::prepareDateForDb($this->getDueDateAt($type, $days, $since))])
-			->andWhere(['<=', 'invoices.dateDue', Db::prepareDateForDb($this->getDueDateAt($type, $days, $now))])
+			->andWhere(['not', [
+				'invoices.dateIssued' => null,
+			]])
+			->andWhere(['>', 'invoices.dateDue', Db::prepareDateForDb($this->getDueDateAt($type, $days, $windowStart))])
+			->andWhere(['<=', 'invoices.dateDue', Db::prepareDateForDb($this->getDueDateAt($type, $days, $windowEnd))])
 			->column();
 
 		$invoices = Plugin::getInstance()->getInvoices()->getInvoicesByIds(array_map(intval(...), $invoiceIds));
@@ -124,15 +116,14 @@ class Reminders extends Component
 				continue;
 			}
 
-			if (! $invoice->dateDue instanceof DateTime) {
-				continue;
-			}
-
 			if ($this->isBeforeBill($type, $days, $invoice->getPaymentTerms())) {
 				continue;
 			}
 
-			$results[] = $this->sendInvoiceReminder($type, $invoice, $invoice->dateDue, $balance);
+			$results[] = $this->send($type, $days, [
+				'emailId' => $email->id,
+				'invoiceId' => $invoice->id,
+			], static fn (): bool => Plugin::getInstance()->getEmails()->send($email, $invoice));
 		}
 
 		return $results;
@@ -141,7 +132,7 @@ class Reminders extends Component
 	/**
 	 * @return array<int, bool|null> whether each reminder was sent, or null when another run claimed it
 	 */
-	private function sendOrderReminders(ReminderType $type, int $days, DateTime $since, DateTime $now): array
+	private function sendOrderReminders(ReminderType $type, int $days, string $emailUid, DateTime $windowStart, DateTime $windowEnd): array
 	{
 		$plugin = Plugin::getInstance();
 		$accountIdsByOrderId = (new Query())
@@ -156,6 +147,7 @@ class Reminders extends Component
 				'[[reminders.orderId]] = [[creditOrders.orderId]]',
 				[
 					'reminders.type' => $type->value,
+					'reminders.days' => $days,
 				],
 			])
 			->innerJoin([
@@ -173,14 +165,12 @@ class Reminders extends Component
 			->id(array_keys($accountIdsByOrderId))
 			->all();
 
-		$dueAfter = $this->getDueDateAt($type, $days, $since);
-		$dueBy = $this->getDueDateAt($type, $days, $now);
+		$dueAfter = $this->getDueDateAt($type, $days, $windowStart);
+		$dueBy = $this->getDueDateAt($type, $days, $windowEnd);
 		$results = [];
 		foreach ($orders as $order) {
+			/** @var Account $account */
 			$account = $plugin->getAccounts()->getAccountById((int) $accountIdsByOrderId[$order->id]);
-			if (! $account instanceof Account) {
-				continue;
-			}
 
 			// Work out the due date here, since terms vary by account and order
 			$dateDue = $plugin->getCreditOrders()->getDateDue($order, $account);
@@ -200,7 +190,7 @@ class Reminders extends Component
 				continue;
 			}
 
-			$results[] = $this->sendOrderReminder($type, $order, $dateDue);
+			$results[] = $this->sendOrderReminder($type, $days, $emailUid, $order, $dateDue);
 		}
 
 		return $results;
@@ -225,58 +215,51 @@ class Reminders extends Component
 		return $type === ReminderType::DueSoon && $days > $paymentTerms;
 	}
 
-	private function sendInvoiceReminder(ReminderType $type, Invoice $invoice, DateTime $dateDue, Money $balance): ?bool
+	private function sendOrderReminder(ReminderType $type, int $days, string $emailUid, Order $order, DateTime $dateDue): ?bool
 	{
-		$account = $invoice->getAccount();
-		$holder = $account->getHolder();
+		/** @var Commerce $commerce */
+		$commerce = Commerce::getInstance();
+		$email = $commerce->getEmails()->getAllEnabledEmails($order->storeId)->firstWhere('uid', $emailUid);
 
-		if (! $holder instanceof User || $holder->email === null) {
-			Craft::warning(sprintf('No reminder was sent for invoice %s, because account %d has no holder email address.', $invoice->number, $account->id), Plugin::HANDLE);
+		if (! $email instanceof CommerceEmail) {
+			Craft::warning(sprintf('No %s reminder was sent for order %s, because its Commerce email isn’t enabled in the order’s store.', $type->value, $order->reference), Plugin::HANDLE);
 
 			return false;
 		}
 
-		return $this->send($type, [
-			'invoiceId' => $invoice->id,
-		], $holder->email, [
-			'recipientName' => $holder->getName(),
-			'label' => Craft::t(Plugin::HANDLE, 'reminder.invoiceLabel', [
-				'number' => $invoice->number,
-			]),
-			'amountDue' => Amounts::toString($balance),
-			'dateDue' => Craft::$app->getFormatter()->asDate($dateDue, 'long'),
-			'link' => Plugin::getInstance()->getInvoices()->getStorefrontUrl($invoice),
-		]);
-	}
-
-	private function sendOrderReminder(ReminderType $type, Order $order, DateTime $dateDue): ?bool
-	{
-		$creditOrders = Plugin::getInstance()->getCreditOrders();
-		$orderPath = Plugin::getInstance()->getSettings()->orderPath;
-
-		return $this->send($type, [
+		return $this->send($type, $days, [
 			'orderId' => $order->id,
-		], (string) $order->email, [
-			'recipientName' => $order->getCustomer()?->getName() ?? $order->email,
-			'label' => Craft::t(Plugin::HANDLE, 'reminder.orderLabel', [
-				'reference' => $creditOrders->getLabel($order),
-			]),
-			'amountDue' => Amounts::toString($creditOrders->getBalance($order)),
-			'dateDue' => Craft::$app->getFormatter()->asDate($dateDue, 'long'),
-			'link' => $orderPath !== null ? UrlHelper::siteUrl(str_replace('{number}', (string) $order->number, $orderPath), null, null, $order->orderSiteId) : null,
-		]);
+		], static function () use ($commerce, $email, $order, $type, $days, $dateDue): bool {
+			$error = '';
+			$sent = $commerce->getEmails()->sendEmail($email, $order, null, [
+				'netTerms' => [
+					'type' => $type->value,
+					'days' => $days,
+					'dateDue' => $dateDue,
+					'amountDue' => Amounts::toString(Plugin::getInstance()->getCreditOrders()->getBalance($order)),
+				],
+			], $error);
+
+			if (! $sent) {
+				Craft::error(sprintf('The %s reminder for order %s was not sent: %s', $type->value, $order->reference, $error), Plugin::HANDLE);
+			}
+
+			return $sent;
+		});
 	}
 
 	/**
 	 * Send the reminder once, or return null when another run already claimed it.
 	 *
-	 * @param array{invoiceId?: int|null, orderId?: int|null} $target
-	 * @param array<string, string|null> $variables
+	 * @param array{emailId?: int|null, invoiceId?: int|null, orderId?: int|null} $target
+	 * @param callable(): bool $deliver
 	 */
-	private function send(ReminderType $type, array $target, string $email, array $variables): ?bool
+	private function send(ReminderType $type, int $days, array $target, callable $deliver): ?bool
 	{
 		$reminderRecord = new ReminderRecord();
 		$reminderRecord->type = $type->value;
+		$reminderRecord->days = $days;
+		$reminderRecord->emailId = $target['emailId'] ?? null;
 		$reminderRecord->invoiceId = $target['invoiceId'] ?? null;
 		$reminderRecord->orderId = $target['orderId'] ?? null;
 
@@ -284,18 +267,15 @@ class Reminders extends Component
 		try {
 			$reminderRecord->save(false);
 		} catch (IntegrityException) {
-			// Another run claimed the reminder, so leave it out of this run's counts
+			// Leave the reminder out of this run's counts, since another run claimed it
 			return null;
 		}
 
-		// Catch render errors too, since an admin's edit to the system message can break its Twig
+		// Catch render errors too, since an admin's edit to an email can break its Twig
 		try {
-			$sent = Craft::$app->getMailer()
-				->composeFromKey($type->messageKey(), $variables)
-				->setTo($email)
-				->send();
+			$sent = $deliver();
 		} catch (Throwable $throwable) {
-			Craft::error(sprintf('The %s reminder to %s was not sent: %s', $type->value, $email, $throwable->getMessage()), Plugin::HANDLE);
+			Craft::error(sprintf('The %s reminder for %s was not sent: %s', $type->value, isset($target['invoiceId']) ? "invoice {$target['invoiceId']}" : "order {$target['orderId']}", $throwable->getMessage()), Plugin::HANDLE);
 			$sent = false;
 		}
 

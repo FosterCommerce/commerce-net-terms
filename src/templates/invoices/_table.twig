@@ -28,10 +28,10 @@
 					<span class="status {{ status.color() }}"></span>{{ status.label() }}
 					{% if not invoice.getIsVoided() and invoice.dateDue < now and figures.balance.isPositive() %}<span class="error">{{ 'invoice.overdue'|t('net-terms') }}</span>{% endif %}
 				</td>
-				<td>{{ invoice.dateIssued|date('short') }}</td>
+				<td>{{ invoice.dateIssued ? invoice.dateIssued|date('short') : '–' }}</td>
 				<td>{{ invoice.dateDue|date('short') }}</td>
-				<td class="nt-amount">{{ figures.total|money }}</td>
-				<td class="nt-amount">{{ figures.balance|money }}</td>
+				<td class="nt-amount">{{ invoice.getIsDraft() ? '–' : figures.total|money }}</td>
+				<td class="nt-amount">{{ invoice.getIsDraft() ? '–' : figures.balance|money }}</td>
 			</tr>
 		{% endfor %}
 	</tbody>

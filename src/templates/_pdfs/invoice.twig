@@ -1,0 +1,62 @@
+{# Plain invoice PDF. To brand it, copy it into your site and set its path in Template under Invoice PDF in Net Terms → Settings. #}
+{% set holder = account.getHolder() %}
+<!DOCTYPE html>
+<html lang="{{ craft.app.language }}">
+<head>
+	<meta charset="utf-8">
+	<title>{{ 'reminder.invoiceLabel'|t('net-terms', { number: invoice.number }) }}</title>
+	<style>
+		body { font-family: Helvetica, Arial, sans-serif; font-size: 12px; color: #1f2937; }
+		h1 { font-size: 20px; margin: 0 0 4px; }
+		h2 { font-size: 14px; margin: 24px 0 6px; }
+		table { width: 100%; border-collapse: collapse; }
+		th, td { padding: 6px 4px; border-bottom: 1px solid #e5e7eb; text-align: left; }
+		.amount { text-align: right; }
+		.muted { color: #6b7280; }
+	</style>
+</head>
+<body>
+	<h1>{{ 'reminder.invoiceLabel'|t('net-terms', { number: invoice.number }) }}</h1>
+	<p class="muted">{{ holder ? holder.name }}</p>
+
+	<table>
+		<tr><td class="muted">{{ 'invoice.dateIssued'|t('net-terms') }}</td><td class="amount">{{ invoice.dateIssued|date('long') }}</td></tr>
+		<tr><td class="muted">{{ 'invoice.dateDue'|t('net-terms') }}</td><td class="amount">{{ invoice.dateDue|date('long') }}</td></tr>
+	</table>
+
+	{% for line in lines %}
+		{% set buyer = line.getBuyer() %}
+		<h2>{{ buyer ? buyer.getName() : 'ledger.account'|t('net-terms') }}</h2>
+		<table>
+			<tr>
+				<th>{{ 'ledger.date'|t('net-terms') }}</th>
+				<th>{{ 'ledger.type'|t('net-terms') }}</th>
+				<th>{{ 'ledger.detail'|t('net-terms') }}</th>
+				<th class="amount">{{ 'ledger.amount'|t('net-terms') }}</th>
+			</tr>
+			{% for entry in entriesByLineId[line.id] %}
+				{% set entryOrder = entry.orderId ? (ordersById[entry.orderId] ?? null) : null %}
+				<tr>
+					<td>{{ entry.dateCreated|date('short') }}</td>
+					<td>{{ entry.type.label() }}</td>
+					<td>{{ entryOrder ? (entryOrder.reference ?: entryOrder.shortNumber) }}{{ entry.note }}</td>
+					<td class="amount">{{ entry.amount|money }}</td>
+				</tr>
+			{% endfor %}
+		</table>
+	{% endfor %}
+
+	<table style="margin-top: 24px;">
+		<tr><th>{{ 'invoice.total'|t('net-terms') }}</th><td class="amount">{{ figures.total|money }}</td></tr>
+		<tr><th>{{ 'invoice.balance'|t('net-terms') }}</th><td class="amount"><strong>{{ figures.balance|money }}</strong></td></tr>
+	</table>
+
+	{% if invoice.notes %}
+		<p>{{ invoice.notes|nl2br }}</p>
+	{% endif %}
+
+	{% if invoiceUrl %}
+		<p class="muted">{{ invoiceUrl }}</p>
+	{% endif %}
+</body>
+</html>

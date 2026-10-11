@@ -9,6 +9,8 @@ use fostercommerce\netterms\Plugin;
 
 enum InvoiceStatus: string
 {
+	case Draft = 'draft';
+
 	case Open = 'open';
 
 	case PartiallyPaid = 'partiallyPaid';
@@ -20,6 +22,7 @@ enum InvoiceStatus: string
 	public function label(): string
 	{
 		return match ($this) {
+			self::Draft => Craft::t(Plugin::HANDLE, 'invoiceStatus.draft'),
 			self::Open => Craft::t(Plugin::HANDLE, 'invoiceStatus.open'),
 			self::PartiallyPaid => Craft::t(Plugin::HANDLE, 'invoiceStatus.partiallyPaid'),
 			self::Paid => Craft::t(Plugin::HANDLE, 'invoiceStatus.paid'),
@@ -30,6 +33,7 @@ enum InvoiceStatus: string
 	public function color(): string
 	{
 		return match ($this) {
+			self::Draft => 'white',
 			self::Open => 'orange',
 			self::PartiallyPaid => 'blue',
 			self::Paid => 'green',

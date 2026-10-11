@@ -34,7 +34,6 @@ class NetTermsCpAsset extends AssetBundle
 				'buyer.removeConfirm',
 				'invoice.voidConfirm',
 				'application.reverseConfirm',
-				'invoice.issueConfirm',
 			]);
 		}
 	}

@@ -87,7 +87,7 @@ Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, function (Defi
 |---|---|---|
 | `account` | `Account` | The account. |
 | `user` | `User` | The user being added. |
-| `isEligible` | `bool` | Defaults to `true`. Set `false` to refuse the user with a 403. |
+| `isEligible` | `bool` | Defaults to `false`, which refuses the user with a 403. Set `true` to allow them. |
 
 **Listen:**
 
@@ -101,7 +101,32 @@ Event::on(Accounts::class, Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY, function (D
 });
 ```
 
-**Common use:** letting a company's admins add only the company's own people.
+**Common use:** letting a company's admins add only the company's own people. Without a handler, `net-terms/storefront/save-buyer` doesn't add buyers.
+
+## Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY
+
+**Fires:** when an account is created, before it is saved.
+
+**Payload:** `fostercommerce\netterms\events\DefineHolderEligibilityEvent`
+
+| Property | Type | Notes |
+|---|---|---|
+| `user` | `User` | The user chosen as the account holder. |
+| `isEligible` | `bool` | Defaults to `true`. Set `false` to refuse the account with "That user can’t hold a Net Terms account." |
+
+**Listen:**
+
+```php
+use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
+use fostercommerce\netterms\services\Accounts;
+use yii\base\Event;
+
+Event::on(Accounts::class, Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY, function (DefineHolderEligibilityEvent $event) {
+	$event->isEligible = MyCompanies::isCompanyUser($event->user);
+});
+```
+
+**Common use:** letting only the users that represent companies hold accounts.
 
 ## Ledger::EVENT_AFTER_ADD_ENTRY
 

@@ -155,3 +155,15 @@
 .fc-plugin-credit:hover .fc-fc-logo path[fill="#D8AF7C"] {
 	fill: #D8AF7C;
 }
+
+.nt-col-name {
+	width: 30%;
+}
+
+.nt-col-schedule {
+	width: 45%;
+}
+
+.nt-col-status {
+	width: 25%;
+}

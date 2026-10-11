@@ -1,0 +1,27 @@
+{% extends '_layouts/cp' %}
+{% do view.registerAssetBundle('fostercommerce\\netterms\\web\\assets\\cp\\NetTermsCpAsset') %}
+
+{% set selectedSubnavItem = 'emails' %}
+{% set title = 'nav.emails'|t('net-terms') %}
+
+{% block content %}
+	<h2>{{ 'email.invoiceEmail'|t('net-terms') }}</h2>
+	{% if invoiceEmail %}
+		{% include 'net-terms/emails/_table' with { emails: [invoiceEmail] } %}
+	{% endif %}
+
+	<hr>
+
+	<h2>{{ 'email.reminders'|t('net-terms') }}</h2>
+	{% if reminderEmails|length %}
+		{% include 'net-terms/emails/_table' with { emails: reminderEmails } %}
+	{% else %}
+		<p class="zilch">{{ 'email.noReminders'|t('net-terms') }}</p>
+	{% endif %}
+
+	<div class="buttons">
+		<a href="{{ url('net-terms/emails/new') }}" class="btn add icon dashed">{{ 'email.newReminder'|t('net-terms') }}</a>
+	</div>
+
+	{% include 'net-terms/_includes/footer' %}
+{% endblock %}

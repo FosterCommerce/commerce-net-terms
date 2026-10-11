@@ -4,7 +4,9 @@ declare(strict_types=1);
 
 namespace fostercommerce\netterms\models;
 
+use Craft;
 use craft\base\Model;
+use craft\helpers\DateTimeHelper;
 use craft\helpers\UrlHelper;
 use DateTime;
 use DateTimeZone;
@@ -12,7 +14,7 @@ use fostercommerce\netterms\Plugin;
 use yii\base\InvalidConfigException;
 
 /**
- * A bill for an account's charges, one line per buyer.
+ * A bill for an account's charges, one line per buyer. A draft has no issue date and no lines.
  */
 class Invoice extends Model
 {
@@ -27,6 +29,8 @@ class Invoice extends Model
 	public ?DateTime $dateDue = null;
 
 	public ?DateTime $dateVoided = null;
+
+	public ?string $notes = null;
 
 	/**
 	 * @throws InvalidConfigException if the account doesn’t exist
@@ -48,6 +52,11 @@ class Invoice extends Model
 	public function getLines(): array
 	{
 		return $this->id !== null ? Plugin::getInstance()->getInvoices()->getLinesByInvoiceId($this->id) : [];
+	}
+
+	public function getIsDraft(): bool
+	{
+		return ! $this->dateIssued instanceof DateTime;
 	}
 
 	public function getIsVoided(): bool
@@ -81,5 +90,24 @@ class Invoice extends Model
 	public function getCpEditUrl(): string
 	{
 		return UrlHelper::cpUrl('net-terms/invoices/' . $this->id);
+	}
+
+	public function validateDateDue(string $attribute): void
+	{
+		if ($this->dateDue < DateTimeHelper::today()) {
+			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'invoice.dateDuePast'));
+		}
+	}
+
+	/**
+	 * @return array<int, mixed>
+	 */
+	protected function defineRules(): array
+	{
+		return [
+			[['accountId', 'dateDue'], 'required'],
+			[['notes'], 'string'],
+			[['dateDue'], 'validateDateDue'],
+		];
 	}
 }

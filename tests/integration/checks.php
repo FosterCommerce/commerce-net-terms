@@ -32,6 +32,7 @@ use craft\elements\User;
 use craft\helpers\Db;
 use fostercommerce\netterms\db\Table;
 use fostercommerce\netterms\enums\AccountStatus;
+use fostercommerce\netterms\enums\EmailTrigger;
 use fostercommerce\netterms\enums\EntryType;
 use fostercommerce\netterms\enums\InvoiceStatus;
 use fostercommerce\netterms\enums\PaymentMethod;
@@ -44,6 +45,7 @@ use fostercommerce\netterms\gateways\NetTerms;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Buyer;
+use fostercommerce\netterms\models\Email;
 use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\models\InvoiceLine;
 use fostercommerce\netterms\models\Payment;
@@ -877,7 +879,9 @@ try {
 
 		check('a payment made online lowers what is owed with nothing recorded by Net Terms', function () use ($secondOrder, $reload, $payments, $orderAccount, $owedMatchesOrders): bool|string {
 			$onlineOrder = $reload($secondOrder);
-			$onlineOrder->gatewayId = (int) commerce()->getGateways()->getGatewayByHandle('process')?->id;
+			/** @var craft\commerce\base\GatewayInterface|null $onlineGateway */
+			$onlineGateway = commerce()->getGateways()->getAllGateways()->first(static fn (mixed $gateway): bool => ! $gateway instanceof NetTerms);
+			$onlineOrder->gatewayId = (int) $onlineGateway?->id;
 			$transaction = commerce()->getTransactions()->createTransaction($onlineOrder, null, TransactionRecord::TYPE_PURCHASE);
 			$transaction->amount = 10.0;
 			$transaction->paymentAmount = 10.0;
@@ -1013,7 +1017,9 @@ try {
 
 			// Pay the new balance through another gateway before the queue runs
 			$paid = expect(Order::find()->id($editOrder->id)->one(), Order::class);
-			$paid->gatewayId = (int) commerce()->getGateways()->getGatewayByHandle('process')?->id;
+			/** @var craft\commerce\base\GatewayInterface|null $onlineGateway */
+			$onlineGateway = commerce()->getGateways()->getAllGateways()->first(static fn (mixed $gateway): bool => ! $gateway instanceof NetTerms);
+			$paid->gatewayId = (int) $onlineGateway?->id;
 			$online = commerce()->getTransactions()->createTransaction($paid, null, TransactionRecord::TYPE_PURCHASE);
 			$online->amount = $paid->getOutstandingBalance();
 			$online->paymentAmount = $paid->getOutstandingBalance();
@@ -1145,8 +1151,26 @@ try {
 	section('Reminders');
 
 	$reminderSettings = $plugin->getSettings();
-	$reminderSettings->dueSoonReminderDays = 7;
-	$reminderSettings->overdueReminderDays = 1;
+	$emails = $plugin->getEmails();
+	/** @var fostercommerce\netterms\models\Email[] $testEmails */
+	$testEmails = [];
+	// An enabled reminder email to the account holder, deleted after the section
+	$makeReminderEmail = static function (string $trigger, int $days) use ($emails, &$testEmails): Email {
+		$email = new Email([
+			'name' => "Check {$trigger} {$days}",
+			'trigger' => EmailTrigger::from($trigger),
+			'days' => $days,
+			'subject' => $trigger === 'overdue' ? '{{label}} is overdue' : '{{label}} is due on {{dateDue}}',
+			'body' => '{{label}}: {{amountDue}}',
+		]);
+		if (! $emails->saveEmail($email)) {
+			throw new RuntimeException('Could not save reminder email: ' . json_encode($email->getErrors()));
+		}
+
+		$testEmails[] = $email;
+
+		return $email;
+	};
 	/** @var ArrayObject<int, string> $sentTo */
 	$sentTo = new ArrayObject();
 	$sentHandler = static function (yii\mail\MailEvent $mailEvent) use ($sentTo): void {
@@ -1181,15 +1205,17 @@ try {
 		$reminderInvoice = expect($invoices->issueInvoice($reminderAccount), Invoice::class);
 		$invoiceDue = expect($reminderInvoice->dateDue, DateTime::class);
 		$reminders = $plugin->getReminders();
-		// A run at the given moment, as the console command makes one
-		$runOn = static fn (DateTime $now): array => $reminders->sendReminders((clone $now)->modify('-2 days'), $now);
+		$makeReminderEmail('dueSoon', 7);
+		$overdueEmail = $makeReminderEmail('overdue', 1);
+		// A run on the given moment's day, as the console command makes one
+		$runOn = static fn (DateTime $now): array => $reminders->sendReminders((clone $now)->setTime(0, 0), (clone $now)->setTime(0, 0)->modify('+1 day'));
 
-		check('a due-soon reminder whose moment came before the invoice existed is skipped', function () use ($runOn, $reminderSettings, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
-			$reminderSettings->dueSoonReminderDays = 45;
+		check('a due-soon reminder whose moment came before the invoice existed is skipped', function () use ($runOn, $makeReminderEmail, $emails, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+			$longEmail = $makeReminderEmail('dueSoon', 45);
 			try {
 				$runOn((clone $invoiceDue)->modify('-45 days'));
 			} finally {
-				$reminderSettings->dueSoonReminderDays = 7;
+				$emails->deleteEmail($longEmail);
 			}
 
 			return $sentToCount((string) $reminderHolder->email) === 0 ? true : 'sent';
@@ -1214,18 +1240,22 @@ try {
 
 			return $sentToCount((string) $reminderHolder->email) === 2 ? true : $sentToCount((string) $reminderHolder->email) . ' sent';
 		});
-		check('the reminder uses the system message', function () use ($reminderInvoice, $tag): bool|string {
-			$message = Craft::$app->getMailer()->composeFromKey(fostercommerce\netterms\enums\ReminderType::Overdue->messageKey(), [
-				'recipientName' => 'Pat',
-				'label' => 'Invoice ' . $reminderInvoice->number,
-				'amountDue' => '$10.00',
-				'dateDue' => 'today',
-				'link' => null,
-			]);
-			$message->setTo($tag . '-nobody@net-terms.example');
-			Craft::$app->getMailer()->send($message);
+		check('the reminder subject renders from the email', function () use ($emails, $overdueEmail, $reminderInvoice): bool|string {
+			/** @var ArrayObject<int, string> $subjects */
+			$subjects = new ArrayObject();
+			$captureSubject = static function (yii\mail\MailEvent $mailEvent) use ($subjects): void {
+				$subjects->append((string) $mailEvent->message->getSubject());
+			};
+			Event::on(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $captureSubject);
+			try {
+				$emails->send($overdueEmail, $reminderInvoice);
+			} finally {
+				Event::off(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $captureSubject);
+			}
 
-			return $message->getSubject() === 'Invoice ' . $reminderInvoice->number . ' is overdue' ? true : (string) $message->getSubject();
+			$subject = $subjects->getArrayCopy()[0] ?? '';
+
+			return $subject === 'Invoice ' . $reminderInvoice->number . ' is overdue' ? true : $subject;
 		});
 
 		$reminderPayment = new Payment([
@@ -1254,7 +1284,38 @@ try {
 			return $sentToCount((string) $paidHolder->email) === 0 ? true : 'sent';
 		});
 
+		$multiHolder = makeUser('multiholder');
+		$multiAccount = makeAccount($multiHolder, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $multiHolder->id;
+		pay(makeOrder($multiHolder, $variant, 1, $gatewayId));
+		$multiInvoice = expect($invoices->issueInvoice($multiAccount), Invoice::class);
+		check('two reminder emails with one schedule each send once', function () use ($runOn, $makeReminderEmail, $emails, $multiInvoice, $sentToCount, $multiHolder): bool|string {
+			// The 7-day reminder made for the section shares this schedule
+			$secondEmail = $makeReminderEmail('dueSoon', 7);
+			$multiDue = expect($multiInvoice->dateDue, DateTime::class);
+			try {
+				$runOn((clone $multiDue)->modify('-7 days'));
+				$runOn((clone $multiDue)->modify('-7 days'));
+			} finally {
+				$emails->deleteEmail($secondEmail);
+			}
+
+			return $sentToCount((string) $multiHolder->email) === 2 ? true : $sentToCount((string) $multiHolder->email) . ' sent';
+		});
+
 		$gateway->paymentType = TransactionRecord::TYPE_AUTHORIZE;
+		// Send a customer Commerce email from the site, since order reminders send the email a row chooses
+		$customerEmail = commerce()->getEmails()->getAllEnabledEmails()->firstWhere('recipientType', craft\commerce\records\Email::TYPE_CUSTOMER);
+		if (! $customerEmail instanceof craft\commerce\models\Email) {
+			throw new RuntimeException('Add an enabled Commerce email sent to the customer first.');
+		}
+
+		$reminderSettings->reminders = [[
+			'days' => 1,
+			'emailUid' => $customerEmail->uid,
+			'enabled' => true,
+			'type' => 'overdue',
+		]];
 		$creditOrderHolder = makeUser('reminderorderholder');
 		makeAccount($creditOrderHolder, Amounts::toDecimal($unitPrice->multiply('20')));
 		$payingUserId = $creditOrderHolder->id;
@@ -1265,7 +1326,7 @@ try {
 
 			return DateTime::createFromInterface(expect($completed->dateOrdered, DateTimeInterface::class))->modify('+31 days')->modify('+1 hour');
 		};
-		check('a reminder whose moment is older than the lookback is skipped', function () use ($runOn, $creditOrder, $sentToCount, $overdueDate): bool|string {
+		check('a reminder from a day without a run is skipped', function () use ($runOn, $creditOrder, $sentToCount, $overdueDate): bool|string {
 			$completed = expect(Order::find()->id($creditOrder->id)->one(), Order::class);
 			$runOn($overdueDate()->modify('+5 days'));
 
@@ -1273,7 +1334,7 @@ try {
 		});
 		check('a reminder that fails to render is retried on the next run', function () use ($runOn, $creditOrder, $overdueDate): bool|string {
 			$breakRender = static function (): void {
-				throw new RuntimeException('Broken system message');
+				throw new RuntimeException('Broken email template');
 			};
 			Event::on(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_BEFORE_PREP, $breakRender);
 			try {
@@ -1288,7 +1349,7 @@ try {
 
 			return $counts['failed'] > 0 && (int) $rowCount === 0 ? true : json_encode($counts) . ', ' . $rowCount . ' rows';
 		});
-		check('in order billing the overdue reminder goes to the order’s email', function () use ($runOn, $creditOrder, $sentToCount, $overdueDate): bool|string {
+		check('in order billing the overdue reminder sends the chosen Commerce email to the customer', function () use ($runOn, $creditOrder, $sentToCount, $overdueDate): bool|string {
 			$completed = expect(Order::find()->id($creditOrder->id)->one(), Order::class);
 			$runOn($overdueDate());
 
@@ -1298,8 +1359,11 @@ try {
 		Event::off(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $sentHandler);
 		Event::off(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_BEFORE_SEND, $fixturesOnlyHandler);
 		$gateway->paymentType = TransactionRecord::TYPE_PURCHASE;
-		$reminderSettings->dueSoonReminderDays = null;
-		$reminderSettings->overdueReminderDays = null;
+		$reminderSettings->reminders = [];
+		foreach ($testEmails as $testEmail) {
+			$emails->deleteEmail($testEmail);
+		}
+
 		$payingUserId = null;
 	}
 

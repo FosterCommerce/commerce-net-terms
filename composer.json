@@ -35,6 +35,7 @@
 		"php": "^8.2",
 		"craftcms/cms": "^5.10.0",
 		"craftcms/commerce": "^5.4.0",
+		"dompdf/dompdf": "^2.0.2 || ^3.0",
 		"moneyphp/money": "^4.0"
 	},
 	"require-dev": {

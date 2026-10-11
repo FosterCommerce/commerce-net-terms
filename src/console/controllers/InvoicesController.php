@@ -6,6 +6,7 @@ namespace fostercommerce\netterms\console\controllers;
 
 use Craft;
 use craft\console\Controller;
+use craft\errors\MutexException;
 use craft\helpers\Console;
 use fostercommerce\netterms\enums\Billing;
 use fostercommerce\netterms\errors\LedgerException;
@@ -25,7 +26,7 @@ class InvoicesController extends Controller
 	public ?int $accountId = null;
 
 	/**
-	 * @var bool Email each invoice to its account holder once issued.
+	 * @var bool Email each invoice with the invoice email.
 	 */
 	public bool $send = false;
 
@@ -68,10 +69,18 @@ class InvoicesController extends Controller
 
 		// Issue the remaining accounts when one is locked
 		foreach ($accounts as $account) {
+			// Leave an account with a draft to the staff working on it
+			$draft = $plugin->getInvoices()->getDraftByAccountId((int) $account->id);
+			if ($draft instanceof Invoice) {
+				$this->stdout("Account {$account->id}: skipped, since it has draft {$draft->number}.\n");
+
+				continue;
+			}
+
 			try {
 				$invoice = $plugin->getInvoices()->issueInvoice($account);
-			} catch (LedgerException $ledgerException) {
-				$this->stderr("Account {$account->id}: {$ledgerException->getMessage()}\n", Console::FG_RED);
+			} catch (LedgerException|MutexException $lockException) {
+				$this->stderr("Account {$account->id}: {$lockException->getMessage()}\n", Console::FG_RED);
 				$exitCode = ExitCode::TEMPFAIL;
 
 				continue;

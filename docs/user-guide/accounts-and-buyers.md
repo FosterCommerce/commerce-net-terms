@@ -10,16 +10,16 @@ An account's page has tabs for **Account**, with the settings below, then **Buye
 
 | Setting | What it does |
 |---|---|
-| Account holder | The customer the account belongs to, who receives its invoices. Set once, when the account is created. The holder is added as the account's first buyer, with no sublimit. |
+| Account holder | The customer the account belongs to, who receives its invoices. Set once, when the account is created. Net Terms adds the holder as the account's first buyer, with no sublimit. |
 | Unlimited credit | Removes the credit limit. Buyers' sublimits still apply, and **Available** shows **Unlimited** for a buyer without one. |
 | Credit limit | The most the account can owe at once. |
-| Sublimits | How buyer sublimits behave on this account: **Ceiling** or **Reserved**. Defaults to the plugin setting. |
+| Protect sublimits | Whether each buyer's sublimit is protected for only them to spend. Defaults to the plugin setting. |
 | Payment terms | Days from an invoice's issue date, or an order's date in order billing, to its due date. Blank uses the plugin's **Default payment terms**, 30 days. See [payment terms](#payment-terms). |
 | Status | **Active**, or **Suspended** to stop buyers checking out on the account. A suspended account still owes what it has charged. |
 
 ### Over the limit
 
-An account or buyer can owe more than its limit. Only checkout, and an order edit in invoice billing on an active buyer and account, check available credit. These can each take an account over its limit:
+An account or buyer can owe more than its limit. Net Terms checks available credit only at checkout, and on an order edit in invoice billing when the buyer and account are active. These can each take an account over its limit:
 
 - lowering the credit limit
 - a positive adjustment
@@ -44,9 +44,9 @@ For why invoice billing has no per-order terms, see [payment terms per order](./
 
 ### Deleting an account
 
-Only an account with no ledger entries, credit orders, invoices or payments can be deleted. To delete one, open it and choose **Delete account** from the menu beside **Save**. To stop an account that has history, set its status to **Suspended**.
+Only an account with no ledger entries, orders, invoices or payments can be deleted. To delete one, open it and choose **Delete account** from the menu beside **Save**. To stop an account that has history, set its status to **Suspended**.
 
-A user who holds an account, or who has ledger entries or credit orders as a buyer, can't be deleted. **Delete** opens a dialog that says why. To delete an account holder, delete their account first, which works only for an account with no history.
+A user who holds an account, or who has ledger entries or orders charged to an account as a buyer, can't be deleted. **Delete** opens a dialog that says why. To delete an account holder, delete their account first, which works only for an account with no history.
 
 ## Buyers
 
@@ -56,27 +56,25 @@ An order charges its customer's account when the customer holds one. Otherwise i
 
 On the account's **Buyers** tab, choose a user, optionally enter a sublimit, and click **Add buyer**.
 
-To remove a buyer, click **Remove**. A buyer with ledger entries or credit orders is deactivated instead, so their history stays on the account. A deactivated buyer has no available credit. **Reactivate** restores them, and so does adding the same user again.
+To remove a buyer, click **Remove**. A buyer with ledger entries or orders is deactivated instead, so their history stays on the account. A deactivated buyer has no available credit. **Reactivate** restores them, and so does adding the same user again.
 
-A buyer's **Owes** figure in invoice billing is what they have charged, less refunds, plus or minus adjustments and order changes, less the payments applied to their invoice lines. In order billing it is what their credit orders still owe. **Available** is what they can charge.
+A buyer's **Owed** figure in invoice billing is what they have charged, less refunds, plus or minus adjustments and order changes, less the payments applied to their invoice lines. In order billing it is what their orders on the account still owe. **Available** is what they can charge.
 
 ## Sublimits
 
 A sublimit caps what one buyer can owe at once. Leave it blank for no sublimit. A new or lowered sublimit can't be below what the buyer already owes.
 
-The account's **Sublimits** setting sets what a sublimit means.
+The account's **Protect sublimits** setting decides whether a buyer's sublimit is also protected for only them to spend.
 
-### Ceiling
+### Sublimits not protected
 
-A sublimit is the most one buyer can owe, and every buyer draws on the same credit. With a $10,000 limit, a buyer with no sublimit can spend all $10,000 and leave the other buyers no credit. Sublimits can add up to more than the limit.
+A sublimit is the most one buyer can owe, and every buyer spends from the same credit limit. With a $10,000 limit and a $2,000 sublimit for one buyer, another buyer can spend $9,000 first and leave that buyer only $1,000. Sublimits can add up to more than the limit.
 
-### Reserved
+### Sublimits protected
 
-A sublimit sets credit aside for that buyer, and no other buyer can spend it. Sublimits can't add up to more than the credit limit, unless the account has unlimited credit. Buyers without a sublimit share whatever isn't reserved.
+A sublimit is still the most one buyer can owe, and that amount is also protected for only them to spend. With a $10,000 limit and a $2,000 sublimit for one buyer, the other buyers share $8,000, and the $2,000 is there for that buyer however much the others spend. Protected sublimits can't add up to more than the credit limit, unless the account has unlimited credit.
 
-With a $10,000 limit and $2,000 reserved for one buyer, the other buyers share $8,000, and the $2,000 is there for that buyer however much the others spend.
-
-The plugin settings don't accept **Reserved** as the default while an account that uses the default has sublimits adding up to more than its limit, and name those accounts.
+The plugin settings don't accept **Protect sublimits** turned on as the default while an account that uses the default has sublimits adding up to more than its limit, and name those accounts.
 
 ### When credit reopens
 

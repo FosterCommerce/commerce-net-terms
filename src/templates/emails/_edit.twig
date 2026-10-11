@@ -1,0 +1,177 @@
+{% extends '_layouts/cp' %}
+{% import '_includes/forms' as forms %}
+
+{% set selectedSubnavItem = 'emails' %}
+{% set fullPageForm = true %}
+{% set title = email.id ? email.name : 'email.newReminder'|t('net-terms') %}
+{% set crumbs = [
+	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
+	{ label: 'nav.emails'|t('net-terms'), url: url('net-terms/emails') },
+] %}
+
+{% if email.id and email.isReminder %}
+	{% set formActions = [
+		{
+			label: 'email.delete'|t('net-terms'),
+			action: 'net-terms/emails/delete',
+			redirect: 'net-terms/emails'|hash,
+			destructive: true,
+			confirm: 'email.deleteConfirm'|t('net-terms'),
+		},
+	] %}
+{% endif %}
+
+{% block content %}
+	{{ actionInput('net-terms/emails/save') }}
+	{{ redirectInput('net-terms/emails') }}
+	{% if email.id %}{{ hiddenInput('emailId', email.id) }}{% endif %}
+
+	{{ forms.textField({
+		first: true,
+		label: 'email.name'|t('net-terms'),
+		instructions: 'email.nameInstructions'|t('net-terms'),
+		id: 'name',
+		name: 'name',
+		value: email.name,
+		autofocus: true,
+		required: true,
+		errors: email.getErrors('name'),
+	}) }}
+
+	{% if email.isReminder %}
+		{% embed '_includes/forms/field' with {
+			label: 'email.schedule'|t('net-terms'),
+			instructions: 'email.scheduleInstructions'|t('net-terms'),
+			id: 'days',
+			required: true,
+			errors: email.getErrors('days'),
+		} %}
+			{% block input %}
+				{% import '_includes/forms' as forms %}
+				<div class="flex">
+					{{ forms.text({ id: 'days', name: 'days', type: 'number', min: 0, size: 4, value: email.days }) }}
+					<span>{{ 'email.days'|t('net-terms') }}</span>
+					{{ forms.select({
+						id: 'trigger',
+						name: 'trigger',
+						value: email.trigger.value,
+						options: [
+							{ label: 'email.beforeDueDate'|t('net-terms'), value: 'dueSoon' },
+							{ label: 'email.afterDueDate'|t('net-terms'), value: 'overdue' },
+						],
+					}) }}
+				</div>
+			{% endblock %}
+		{% endembed %}
+	{% else %}
+		{% embed '_includes/forms/field' with { label: 'email.schedule'|t('net-terms') } %}
+			{% block input %}<p>{{ 'email.scheduleIssued'|t('net-terms') }}</p>{% endblock %}
+		{% endembed %}
+	{% endif %}
+
+	{{ forms.lightswitchField({
+		label: 'email.enabled'|t('net-terms'),
+		id: 'enabled',
+		name: 'enabled',
+		on: email.enabled,
+	}) }}
+
+	<hr>
+
+	{{ forms.autosuggestField({
+		label: 'email.senderAddress'|t('net-terms'),
+		instructions: 'email.senderAddressInstructions'|t('net-terms'),
+		id: 'senderAddress',
+		name: 'senderAddress',
+		placeholder: senderAddressPlaceholder,
+		value: email.senderAddress,
+		errors: email.getErrors('senderAddress'),
+		suggestEnvVars: true,
+	}) }}
+
+	{{ forms.autosuggestField({
+		label: 'email.senderName'|t('net-terms'),
+		instructions: 'email.senderNameInstructions'|t('net-terms'),
+		id: 'senderName',
+		name: 'senderName',
+		placeholder: senderNamePlaceholder,
+		value: email.senderName,
+		errors: email.getErrors('senderName'),
+		suggestEnvVars: true,
+	}) }}
+
+	{{ forms.textField({
+		label: 'email.subject'|t('net-terms'),
+		instructions: 'email.subjectInstructions'|t('net-terms'),
+		id: 'subject',
+		name: 'subject',
+		value: email.subject,
+		required: true,
+		errors: email.getErrors('subject'),
+	}) }}
+
+	{{ forms.textField({
+		label: 'email.replyTo'|t('net-terms'),
+		instructions: 'email.replyToInstructions'|t('net-terms'),
+		id: 'replyTo',
+		name: 'replyTo',
+		value: email.replyTo,
+		errors: email.getErrors('replyTo'),
+	}) }}
+
+	{{ forms.checkboxGroupField({
+		label: 'email.to'|t('net-terms'),
+		instructions: 'email.toInstructions'|t('net-terms'),
+		id: 'recipients',
+		name: 'recipients',
+		options: [
+			{ label: 'email.toHolder'|t('net-terms'), value: 'holder' },
+			{ label: 'email.toBuyers'|t('net-terms'), value: 'buyers' },
+		],
+		values: [email.sendToHolder ? 'holder', email.sendToBuyers ? 'buyers']|filter,
+		required: true,
+		errors: email.getErrors('sendToHolder'),
+	}) }}
+
+	{{ forms.autosuggestField({
+		label: 'email.bcc'|t('net-terms'),
+		instructions: 'email.addressesInstructions'|t('net-terms'),
+		id: 'bccAddresses',
+		name: 'bccAddresses',
+		value: email.bccAddresses,
+		errors: email.getErrors('bccAddresses'),
+		suggestEnvVars: true,
+	}) }}
+
+	{{ forms.autosuggestField({
+		label: 'email.cc'|t('net-terms'),
+		instructions: 'email.addressesInstructions'|t('net-terms'),
+		id: 'ccAddresses',
+		name: 'ccAddresses',
+		value: email.ccAddresses,
+		errors: email.getErrors('ccAddresses'),
+		suggestEnvVars: true,
+	}) }}
+
+	<hr>
+
+	{{ forms.textareaField({
+		label: 'email.body'|t('net-terms'),
+		instructions: 'email.bodyInstructions'|t('net-terms'),
+		id: 'body',
+		name: 'body',
+		value: email.body,
+		rows: 16,
+		class: 'code',
+		required: true,
+		errors: email.getErrors('body'),
+	}) }}
+
+	{{ forms.lightswitchField({
+		label: 'email.attachPdf'|t('net-terms'),
+		instructions: 'email.attachPdfInstructions'|t('net-terms'),
+		id: 'attachPdf',
+		name: 'attachPdf',
+		on: email.attachPdf,
+	}) }}
+{% endblock %}

@@ -18,6 +18,8 @@ use fostercommerce\netterms\db\Table;
  * @property string $dateReceived
  * @property string|null $note
  * @property int|null $authorId
+ * @property string $dateCreated
+ * @property string $dateUpdated
  */
 class PaymentRecord extends ActiveRecord
 {

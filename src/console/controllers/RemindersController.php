@@ -16,17 +16,11 @@ use yii\console\ExitCode;
 class RemindersController extends Controller
 {
 	/**
-	 * Two days covers one missed daily run. The reminders table’s unique index stops a second send where runs overlap.
-	 */
-	private const LOOKBACK = '-2 days';
-
-	/**
-	 * Email each due-soon and overdue reminder whose moment came in the last two days and that hasn't been sent.
+	 * Email each reminder whose moment is today and that hasn't been sent. A missed day's reminder isn't sent later.
 	 */
 	public function actionSend(): int
 	{
-		$now = new DateTime();
-		$counts = Plugin::getInstance()->getReminders()->sendReminders((clone $now)->modify(self::LOOKBACK), $now);
+		$counts = Plugin::getInstance()->getReminders()->sendReminders(new DateTime('today'), new DateTime('tomorrow'));
 
 		$this->stdout("Reminders sent: {$counts['sent']}.\n", Console::FG_GREEN);
 

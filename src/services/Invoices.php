@@ -5,23 +5,29 @@ declare(strict_types=1);
 namespace fostercommerce\netterms\services;
 
 use Craft;
+use craft\commerce\elements\Order;
+use craft\commerce\Plugin as Commerce;
 use craft\db\Paginator;
-use craft\elements\User;
 use craft\errors\MutexException;
 use craft\helpers\DateTimeHelper;
 use craft\helpers\Db;
+use craft\helpers\FileHelper;
 use craft\helpers\Sequence;
 use craft\helpers\UrlHelper;
 use craft\models\Site;
 use craft\web\View;
 use DateTime;
 use DateTimeZone;
+use Dompdf\Dompdf;
+use Dompdf\Options;
 use fostercommerce\netterms\db\Table;
 use fostercommerce\netterms\enums\InvoiceStatus;
 use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\events\InvoiceEvent;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
+use fostercommerce\netterms\models\Email;
+use fostercommerce\netterms\models\Entry;
 use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\models\InvoiceLine;
 use fostercommerce\netterms\Plugin;
@@ -30,9 +36,10 @@ use fostercommerce\netterms\records\InvoiceRecord;
 use Money\Currency;
 use Money\Money;
 use yii\base\Component;
+use yii\db\Expression;
 
 /**
- * Issues, voids and sends invoices, and works out what is owed on them.
+ * Saves drafts, issues, voids and sends invoices, and works out what is owed on them.
  */
 class Invoices extends Component
 {
@@ -51,6 +58,8 @@ class Invoices extends Component
 	 */
 	public const EVENT_AFTER_ISSUE_INVOICE = 'afterIssueInvoice';
 
+	private const NUMBER_SEQUENCE = 'net-terms:invoice';
+
 	public function getInvoiceById(int $id): ?Invoice
 	{
 		$record = InvoiceRecord::findOne($id);
@@ -58,11 +67,19 @@ class Invoices extends Component
 		return $record instanceof InvoiceRecord ? $this->createInvoiceFromRecord($record) : null;
 	}
 
+	/**
+	 * An issued invoice by its number. Drafts are left out, since `craft.netTerms` and the storefront PDF action look invoices up by number.
+	 */
 	public function getInvoiceByNumber(string $number): ?Invoice
 	{
-		$record = InvoiceRecord::findOne([
-			'number' => $number,
-		]);
+		$record = InvoiceRecord::find()
+			->where([
+				'number' => $number,
+			])
+			->andWhere(['not', [
+				'dateIssued' => null,
+			]])
+			->one();
 
 		return $record instanceof InvoiceRecord ? $this->createInvoiceFromRecord($record) : null;
 	}
@@ -85,6 +102,8 @@ class Invoices extends Component
 	}
 
 	/**
+	 * An account's issued invoices, newest first. Drafts are left out, since `craft.netTerms` returns these to templates.
+	 *
 	 * @return Invoice[]
 	 */
 	public function getInvoicesByAccountId(int $accountId): array
@@ -94,6 +113,9 @@ class Invoices extends Component
 			->where([
 				'accountId' => $accountId,
 			])
+			->andWhere(['not', [
+				'dateIssued' => null,
+			]])
 			->orderBy([
 				'dateIssued' => SORT_DESC,
 				'id' => SORT_DESC,
@@ -104,7 +126,7 @@ class Invoices extends Component
 	}
 
 	/**
-	 * One page of invoices, newest first, for one account or every account. The page results are `Invoice` models.
+	 * One page of invoices, drafts then newest first, for one account or every account. The page results are `Invoice` models.
 	 */
 	public function getInvoicePaginator(?int $accountId, int $currentPage, int $pageSize): Paginator
 	{
@@ -114,6 +136,7 @@ class Invoices extends Component
 					'accountId' => $accountId,
 				])
 				->orderBy([
+					new Expression('[[dateIssued]] IS NULL DESC'),
 					'dateIssued' => SORT_DESC,
 					'id' => SORT_DESC,
 				]),
@@ -128,6 +151,24 @@ class Invoices extends Component
 		$paginator->setPageResults(array_map($this->createInvoiceFromRecord(...), $records));
 
 		return $paginator;
+	}
+
+	public function getDraftByAccountId(int $accountId): ?Invoice
+	{
+		$record = InvoiceRecord::findOne([
+			'accountId' => $accountId,
+			'dateIssued' => null,
+		]);
+
+		return $record instanceof InvoiceRecord ? $this->createInvoiceFromRecord($record) : null;
+	}
+
+	/**
+	 * The invoice number the next new invoice or draft will get.
+	 */
+	public function getNextInvoiceNumber(): string
+	{
+		return $this->formatInvoiceNumber((int) Sequence::current(self::NUMBER_SEQUENCE) + 1);
 	}
 
 	public function getLineById(int $id): ?InvoiceLine
@@ -156,7 +197,7 @@ class Invoices extends Component
 	}
 
 	/**
-	 * Lines on an account’s live invoices with a balance left to pay, oldest due first.
+	 * Lines on an account’s unvoided invoices with a balance left to pay, oldest due first.
 	 *
 	 * @return InvoiceLine[]
 	 */
@@ -280,34 +321,129 @@ class Invoices extends Component
 	}
 
 	/**
-	 * Bill every uninvoiced entry made up to the cutoff, one line per buyer. Returns null when no buyer owes a positive amount.
+	 * What issuing an invoice now would bill each buyer who owes a positive amount. Buyer ID 0 is the account itself.
+	 *
+	 * @return array<int, Money>
+	 */
+	public function getBillableByBuyerId(Account $account, ?DateTime $cutoff = null): array
+	{
+		return array_filter(
+			Plugin::getInstance()->getLedger()->getUninvoicedByBuyers($account, $cutoff ?? DateTimeHelper::currentUTCDateTime()),
+			static fn (Money $amount): bool => $amount->isPositive(),
+		);
+	}
+
+	public function getBillableTotal(Account $account): Money
+	{
+		return Money::sum(Amounts::zero($account->getCurrency()), ...array_values($this->getBillableByBuyerId($account)));
+	}
+
+	/**
+	 * Save a draft, giving a new one the next invoice number. An account has one draft at a time.
 	 *
 	 * @throws LedgerException if the account is locked by another request
 	 * @throws MutexException if the invoice number sequence is locked by another request
 	 */
-	public function issueInvoice(Account $account, ?DateTime $cutoff = null): ?Invoice
+	public function saveDraft(Invoice $invoice): bool
+	{
+		if (! $invoice->validate()) {
+			return false;
+		}
+
+		return Plugin::getInstance()->getLedger()->withAccountLock((int) $invoice->accountId, function () use ($invoice): bool {
+			$existingDraft = $this->getDraftByAccountId((int) $invoice->accountId);
+			if ($existingDraft instanceof Invoice && $existingDraft->id !== $invoice->id) {
+				$invoice->addError('accountId', Craft::t(Plugin::HANDLE, 'invoice.draftExists', [
+					'number' => $existingDraft->number,
+				]));
+
+				return false;
+			}
+
+			$invoiceRecord = $invoice->id !== null ? InvoiceRecord::findOne($invoice->id) : new InvoiceRecord();
+
+			// Refuse when a concurrent request issued this draft first
+			if (! $invoiceRecord instanceof InvoiceRecord || $invoiceRecord->dateIssued !== null) {
+				return false;
+			}
+
+			$invoiceRecord->accountId = (int) $invoice->accountId;
+			$invoiceRecord->number ??= $this->formatInvoiceNumber((int) Sequence::next(self::NUMBER_SEQUENCE));
+			$invoiceRecord->dateDue = (string) Db::prepareDateForDb($invoice->dateDue);
+			$invoiceRecord->notes = $invoice->notes;
+			$invoiceRecord->save(false);
+
+			$invoice->id = $invoiceRecord->id;
+			$invoice->number = $invoiceRecord->number;
+
+			return true;
+		});
+	}
+
+	/**
+	 * Delete a draft. Its number isn't reused.
+	 */
+	public function deleteDraft(Invoice $invoice): bool
+	{
+		return InvoiceRecord::deleteAll([
+			'id' => $invoice->id,
+			'dateIssued' => null,
+		]) > 0;
+	}
+
+	public function saveNotes(Invoice $invoice, ?string $notes): void
+	{
+		Db::update(Table::INVOICES, [
+			'notes' => $notes,
+		], [
+			'id' => $invoice->id,
+		]);
+		$invoice->notes = $notes;
+	}
+
+	/**
+	 * Bill every uninvoiced entry made up to the cutoff, one line per buyer. Returns null when no buyer owes a positive amount.
+	 *
+	 * Pass a draft, or a new invoice, to issue it with its due date and notes. Otherwise the due date follows the account's payment terms.
+	 *
+	 * @throws LedgerException if the account is locked by another request
+	 * @throws MutexException if the invoice number sequence is locked by another request
+	 */
+	public function issueInvoice(Account $account, ?DateTime $cutoff = null, ?Invoice $invoice = null): ?Invoice
 	{
 		$cutoff ??= DateTimeHelper::currentUTCDateTime();
 		$ledger = Plugin::getInstance()->getLedger();
 
-		$invoice = $ledger->withAccountLock((int) $account->id, function () use ($account, $cutoff, $ledger): ?Invoice {
-			$billableByBuyerId = array_filter(
-				$ledger->getUninvoicedByBuyers($account, $cutoff),
-				static fn (Money $amount): bool => $amount->isPositive(),
-			);
+		$issuedInvoice = $ledger->withAccountLock((int) $account->id, function () use ($account, $cutoff, $ledger, $invoice): ?Invoice {
+			$billableByBuyerId = $this->getBillableByBuyerId($account, $cutoff);
+			$invoiceRecord = $invoice?->id !== null ? InvoiceRecord::findOne($invoice->id) : new InvoiceRecord();
 
-			if ($billableByBuyerId === []) {
+			// Return null when a concurrent request issued this draft first
+			if ($billableByBuyerId === [] || ! $invoiceRecord instanceof InvoiceRecord || $invoiceRecord->dateIssued !== null) {
 				return null;
 			}
 
-			$dateIssued = DateTimeHelper::currentUTCDateTime();
-			$dateDue = (clone $dateIssued)->modify('+' . $account->getEffectivePaymentTerms() . ' days');
+			// Refuse a new invoice while the account has a draft, since issuing would bill the charges the draft is for
+			if ($invoice instanceof Invoice) {
+				$draft = $this->getDraftByAccountId((int) $account->id);
+				if ($draft instanceof Invoice && $draft->id !== $invoice->id) {
+					$invoice->addError('accountId', Craft::t(Plugin::HANDLE, 'invoice.draftExists', [
+						'number' => $draft->number,
+					]));
 
-			$invoiceRecord = new InvoiceRecord();
+					return null;
+				}
+			}
+
+			$paymentTerms = $invoice?->dateDue instanceof DateTime ? $this->getDaysUntil($invoice->dateDue) : $account->getEffectivePaymentTerms();
+			$dateIssued = DateTimeHelper::currentUTCDateTime();
+			$dateDue = (clone $dateIssued)->modify('+' . $paymentTerms . ' days');
+
 			$invoiceRecord->accountId = (int) $account->id;
-			$invoiceRecord->number = 'CL-' . Sequence::next('net-terms:invoice', 6);
+			$invoiceRecord->number ??= $this->formatInvoiceNumber((int) Sequence::next(self::NUMBER_SEQUENCE));
 			$invoiceRecord->dateIssued = (string) Db::prepareDateForDb($dateIssued);
 			$invoiceRecord->dateDue = (string) Db::prepareDateForDb($dateDue);
+			$invoiceRecord->notes = $invoice?->notes;
 			$invoiceRecord->save(false);
 
 			foreach (array_keys($billableByBuyerId) as $buyerId) {
@@ -322,17 +458,17 @@ class Invoices extends Component
 			return $this->createInvoiceFromRecord($invoiceRecord);
 		});
 
-		if ($invoice instanceof Invoice && $this->hasEventHandlers(self::EVENT_AFTER_ISSUE_INVOICE)) {
+		if ($issuedInvoice instanceof Invoice && $this->hasEventHandlers(self::EVENT_AFTER_ISSUE_INVOICE)) {
 			$this->trigger(self::EVENT_AFTER_ISSUE_INVOICE, new InvoiceEvent([
-				'invoice' => $invoice,
+				'invoice' => $issuedInvoice,
 			]));
 		}
 
-		return $invoice;
+		return $issuedInvoice;
 	}
 
 	/**
-	 * Void a live invoice that has no active payment applications, returning its entries to the next invoice.
+	 * Void an invoice that has no active payment applications, unassigning its entries so the next invoice bills them.
 	 *
 	 * @throws LedgerException if the account is locked by another request
 	 */
@@ -343,7 +479,7 @@ class Invoices extends Component
 		return $plugin->getLedger()->withAccountLock((int) $invoice->accountId, function () use ($invoice, $plugin): bool {
 			$invoiceRecord = InvoiceRecord::findOne($invoice->id);
 
-			if (! $invoiceRecord instanceof InvoiceRecord || $invoiceRecord->dateVoided !== null) {
+			if (! $invoiceRecord instanceof InvoiceRecord || $invoiceRecord->dateIssued === null || $invoiceRecord->dateVoided !== null) {
 				return false;
 			}
 
@@ -367,7 +503,7 @@ class Invoices extends Component
 	}
 
 	/**
-	 * Reminders already sent stay sent.
+	 * Change an unvoided invoice’s payment terms and due date. Reminders already sent stay sent.
 	 */
 	public function setPaymentTerms(Invoice $invoice, int $days): bool
 	{
@@ -388,38 +524,56 @@ class Invoices extends Component
 	}
 
 	/**
-	 * Email the invoice to the account holder.
+	 * Email the invoice with the invoice email. Returns false when that email is turned off or can't be sent.
 	 */
 	public function sendInvoice(Invoice $invoice): bool
 	{
-		$account = $invoice->getAccount();
-		$holder = $account->getHolder();
+		$email = Plugin::getInstance()->getEmails()->getInvoiceEmail();
 
-		if (! $holder instanceof User || $holder->email === null) {
-			Craft::warning(sprintf('Invoice %s was not emailed, because account %d has no holder email address.', $invoice->number, $account->id), Plugin::HANDLE);
+		return ! $invoice->getIsDraft() && $email instanceof Email && $email->enabled && Plugin::getInstance()->getEmails()->send($email, $invoice);
+	}
 
-			return false;
+	/**
+	 * Render the invoice PDF, named after the invoice number.
+	 *
+	 * @return array{content: string, fileName: string}
+	 */
+	public function renderPdf(Invoice $invoice): array
+	{
+		$settings = Plugin::getInstance()->getSettings();
+		$templatePath = $settings->invoicePdfTemplate;
+		$view = Craft::$app->getView();
+		$ledger = Plugin::getInstance()->getLedger();
+		$lines = $invoice->getLines();
+
+		$entriesByLineId = [];
+		foreach ($lines as $line) {
+			$entriesByLineId[(int) $line->id] = $ledger->getEntriesByInvoiceLineId((int) $line->id);
 		}
 
-		$settings = Plugin::getInstance()->getSettings();
-		$variables = [
+		$html = $view->renderTemplate($templatePath ?? 'net-terms/_pdfs/invoice', [
 			'invoice' => $invoice,
-			'account' => $account,
+			'account' => $invoice->getAccount(),
+			'figures' => $this->getFiguresByInvoiceId([$invoice])[(int) $invoice->id],
+			'lines' => $lines,
+			'figuresByLineId' => $this->getFiguresByLineId($lines, $invoice->getAccount()->getCurrency()),
+			'entriesByLineId' => $entriesByLineId,
+			'ordersById' => Order::find()
+				->id(array_filter(array_map(static fn (Entry $entry): ?int => $entry->orderId, array_merge(...array_values($entriesByLineId)))))
+				->trashed(null)
+				->indexBy('id')
+				->all(),
 			'invoiceUrl' => $this->getStorefrontUrl($invoice),
+		], $templatePath !== null ? View::TEMPLATE_MODE_SITE : View::TEMPLATE_MODE_CP);
+
+		$dompdf = new Dompdf($this->getDompdfOptions($settings->invoicePdfPaperSize, $settings->invoicePdfOrientation));
+		$dompdf->loadHtml($html);
+		$dompdf->render();
+
+		return [
+			'content' => (string) $dompdf->output(),
+			'fileName' => $invoice->number . '.pdf',
 		];
-
-		$view = Craft::$app->getView();
-		$body = $settings->invoiceEmailTemplate !== null
-			? $view->renderTemplate($settings->invoiceEmailTemplate, $variables, View::TEMPLATE_MODE_SITE)
-			: $view->renderTemplate('net-terms/_emails/invoice', $variables, View::TEMPLATE_MODE_CP);
-
-		return Craft::$app->getMailer()->compose()
-			->setTo($holder->email)
-			->setSubject(Craft::t(Plugin::HANDLE, 'email.invoiceSubject', [
-				'number' => $invoice->number,
-			]))
-			->setHtmlBody($body)
-			->send();
 	}
 
 	private function createInvoiceFromRecord(InvoiceRecord $record): Invoice
@@ -428,10 +582,28 @@ class Invoices extends Component
 			'id' => $record->id,
 			'accountId' => $record->accountId,
 			'number' => $record->number,
-			'dateIssued' => DateTimeHelper::toDateTime($record->dateIssued) ?: null,
+			'dateIssued' => $record->dateIssued !== null ? (DateTimeHelper::toDateTime($record->dateIssued) ?: null) : null,
 			'dateDue' => DateTimeHelper::toDateTime($record->dateDue) ?: null,
 			'dateVoided' => $record->dateVoided !== null ? (DateTimeHelper::toDateTime($record->dateVoided) ?: null) : null,
+			'notes' => $record->notes,
 		]);
+	}
+
+	private function formatInvoiceNumber(int $sequenceNumber): string
+	{
+		$settings = Plugin::getInstance()->getSettings();
+
+		return $settings->getInvoiceNumberPrefix() . str_pad((string) ($sequenceNumber + $settings->invoiceNumberStart - 1), 6, '0', STR_PAD_LEFT);
+	}
+
+	/**
+	 * Whole days from today to a date, both in the system time zone, so a due date picked in the control panel keeps its day.
+	 */
+	private function getDaysUntil(DateTime $date): int
+	{
+		$timeZone = new DateTimeZone(Craft::$app->getTimeZone());
+
+		return (int) DateTimeHelper::today($timeZone)->diff((clone $date)->setTimezone($timeZone))->days;
 	}
 
 	private function createLineFromRecord(InvoiceLineRecord $record): InvoiceLine
@@ -461,6 +633,10 @@ class Invoices extends Component
 
 	private function determineStatus(Invoice $invoice, Money $balance, Money $paid): InvoiceStatus
 	{
+		if ($invoice->getIsDraft()) {
+			return InvoiceStatus::Draft;
+		}
+
 		if ($invoice->getIsVoided()) {
 			return InvoiceStatus::Voided;
 		}
@@ -498,5 +674,29 @@ class Invoices extends Component
 		}
 
 		return $figuresByInvoiceId;
+	}
+
+	/**
+	 * Dompdf options for the invoice PDF, matching Commerce's for order PDFs.
+	 */
+	private function getDompdfOptions(string $paperSize, string $paperOrientation): Options
+	{
+		$pathService = Craft::$app->getPath();
+		$tempDir = $pathService->getTempPath() . DIRECTORY_SEPARATOR . 'net_terms_dompdf';
+		$fontCache = $pathService->getCachePath() . DIRECTORY_SEPARATOR . 'net_terms_dompdf';
+		FileHelper::createDirectory($tempDir);
+		FileHelper::createDirectory($fontCache);
+
+		/** @var Commerce $commerce */
+		$commerce = Commerce::getInstance();
+
+		$options = new Options();
+		$options->setTempDir($tempDir);
+		$options->setFontCache($fontCache);
+		$options->setIsRemoteEnabled($commerce->getSettings()->pdfAllowRemoteImages);
+		$options->setDefaultPaperSize($paperSize);
+		$options->setDefaultPaperOrientation($paperOrientation);
+
+		return $options;
 	}
 }

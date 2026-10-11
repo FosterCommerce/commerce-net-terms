@@ -1,5 +1,36 @@
 # Release Notes for Net Terms
 
+## Unreleased
+
+### Added
+- Added the “Invoice number prefix” and “First invoice number” settings.
+- Added the ability to send more than one reminder before and after a due date.
+- Added the ability to edit invoice-billing emails in the control panel, and the `net-terms-manageEmails` permission.
+- Added the ability to choose the Commerce email each order-billing reminder sends.
+- Added invoice PDFs, their settings, and `craft.netTerms.getInvoicePdfUrl()`.
+- Added draft invoices, invoice notes, and the ability to choose an invoice’s due date.
+- Added `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY`.
+
+### Changed
+- Invoices are now issued from a “New invoice” page, and `net-terms/invoices/issue` skips accounts with a draft.
+- New invoice numbers now start with `INV-`. To keep `CL-`, set “Invoice number prefix” to `CL-`.
+- Net Terms’ settings are now in **Net Terms -> Settings**.
+- `net-terms/reminders/send` now sends only the reminders whose moment falls on the day it runs.
+- Lowering a completed order’s total now takes the change off its invoice line when the line’s balance covers it.
+- The `net-terms/storefront/save-buyer` action now refuses to add a buyer unless an `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` handler allows the user.
+
+### Removed
+- Removed the `dueSoonReminderDays`, `overdueReminderDays`, “Invoice email template” and “Storefront order path” settings.
+- Removed the due-soon and overdue system messages, and `Reminders::getSystemMessages()`.
+
+### Fixed
+- Fixed a bug where the payment summary showed amounts 100 times too large in some locales.
+- Fixed an error that could occur when capturing, refunding or editing an order paid in a payment currency with a conversion rate below 0.0001.
+- Fixed a bug where `net-terms/invoices/issue` stopped issuing invoices for the remaining accounts when an invoice number was locked.
+- Fixed an error that could occur when removing a buyer while another change to the account was in progress.
+- Fixed an error that could occur when a payment’s transaction couldn’t be saved in order billing.
+- Fixed a bug where applying or reversing a payment, or editing an order’s total, saved the order twice.
+
 ## 1.0.0 - 2026-10-09
 
 ### Added

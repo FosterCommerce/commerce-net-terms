@@ -6,6 +6,7 @@ namespace fostercommerce\netterms\services;
 
 use Craft;
 use craft\commerce\elements\Order;
+use craft\commerce\errors\TransactionException;
 use craft\commerce\Plugin as Commerce;
 use craft\db\Paginator;
 use craft\db\Query;
@@ -390,6 +391,7 @@ class Payments extends Component
 	 *
 	 * @param array<int, Money> $allocations amounts keyed by invoice line ID in invoice billing, or by order ID in order billing
 	 * @throws LedgerException if an allocation doesn’t fit the payment or its line or order, or the account is locked by another request
+	 * @throws TransactionException if Commerce doesn’t save a transaction
 	 */
 	public function recordPayment(Payment $payment, array $allocations = []): bool
 	{
@@ -475,7 +477,7 @@ class Payments extends Component
 	}
 
 	/**
-	 * Apply a payment to several invoice lines, all of them or none.
+	 * Apply a payment to several invoice lines in one transaction.
 	 *
 	 * @param array<int, Money> $amountsByLineId
 	 * @throws LedgerException if a line doesn’t exist or an amount doesn’t fit, or the account is locked by another request
@@ -496,10 +498,11 @@ class Payments extends Component
 	}
 
 	/**
-	 * Apply a payment to invoice lines or orders, as the billing setting sets, all of them or none.
+	 * Apply a payment to invoice lines or orders, as the billing setting sets, in one transaction.
 	 *
 	 * @param array<int, Money> $allocations amounts keyed by invoice line ID in invoice billing, or by order ID in order billing
 	 * @throws LedgerException if a line or order doesn’t exist or an amount doesn’t fit, or the account is locked by another request
+	 * @throws TransactionException if Commerce doesn’t save a transaction
 	 */
 	public function applyAllocations(Payment $payment, array $allocations): void
 	{
@@ -518,6 +521,7 @@ class Payments extends Component
 	 * Undo an application, returning its amount to the payment’s unapplied credit.
 	 *
 	 * @throws LedgerException if the account is locked by another request, or an order application has no amount left to reverse or its order is in the trash
+	 * @throws TransactionException if Commerce doesn’t save a transaction
 	 */
 	public function reverseApplication(Application $application): void
 	{

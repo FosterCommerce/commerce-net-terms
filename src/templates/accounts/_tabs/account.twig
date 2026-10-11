@@ -32,7 +32,7 @@
 	{{ forms.moneyField({
 		fieldAttributes: {
 			id: 'credit-limit-field',
-			class: account.unlimited ? 'hidden' : null,
+			class: account.unlimited ? ['hidden'] : [],
 		},
 		label: 'account.creditLimit'|t('net-terms'),
 		instructions: 'account.creditLimitInstructions'|t('net-terms'),

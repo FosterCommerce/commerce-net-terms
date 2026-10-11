@@ -17,6 +17,7 @@
 
 {{ forms.selectField({
 	label: 'buyer.user'|t('net-terms'),
+	instructions: 'adjustment.buyerInstructions'|t('net-terms'),
 	id: 'adjustmentBuyerId',
 	name: 'buyerId',
 	options: [{ label: 'ledger.account'|t('net-terms'), value: '' }]|merge(buyers|map(buyer => { label: buyer.getName(), value: buyer.id })),

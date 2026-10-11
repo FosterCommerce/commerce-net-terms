@@ -12,14 +12,16 @@ use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Buyer;
+use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\Plugin;
 use Money\Currency;
 use Money\Money;
 use yii\web\ForbiddenHttpException;
+use yii\web\NotFoundHttpException;
 use yii\web\Response;
 
 /**
- * Lets the people who manage an account set sublimits on the storefront.
+ * Lets the people who manage an account set sublimits on the storefront, and buyers download invoice PDFs.
  */
 class StorefrontController extends Controller
 {
@@ -32,9 +34,34 @@ class StorefrontController extends Controller
 		}
 
 		$this->requireSiteRequest();
-		$this->requirePostRequest();
+
+		// Download the PDF with a plain link, since every other action changes data
+		if ($action->id !== 'invoice-pdf') {
+			$this->requirePostRequest();
+		}
 
 		return true;
+	}
+
+	public function actionInvoicePdf(): Response
+	{
+		$this->requireLogin();
+
+		$plugin = Plugin::getInstance();
+		$number = $this->request->getRequiredQueryParam('number');
+		$invoice = is_string($number) ? $plugin->getInvoices()->getInvoiceByNumber($number) : null;
+		/** @var User $currentUser */
+		$currentUser = Craft::$app->getUser()->getIdentity();
+		if (! $invoice instanceof Invoice || ! $plugin->getAccounts()->canView($invoice->getAccount(), $currentUser)) {
+			throw new NotFoundHttpException(Craft::t(Plugin::HANDLE, 'error.invoiceNotFound'));
+		}
+
+		$pdf = $plugin->getInvoices()->renderPdf($invoice);
+
+		return $this->response->sendContentAsFile($pdf['content'], $pdf['fileName'], [
+			'inline' => true,
+			'mimeType' => 'application/pdf',
+		]);
 	}
 
 	public function actionSaveBuyer(): ?Response
@@ -80,7 +107,11 @@ class StorefrontController extends Controller
 		$account = $this->requireManagedAccount();
 		$buyer = $this->requireBuyerOnAccount($account, $this->requireIdParam('buyerId'));
 
-		$plugin->getAccounts()->removeBuyer($buyer);
+		try {
+			$plugin->getAccounts()->removeBuyer($buyer);
+		} catch (LedgerException $ledgerException) {
+			return $this->asFailure($ledgerException->getMessage());
+		}
 
 		return $this->asSuccess(Craft::t(Plugin::HANDLE, $buyer->active ? 'buyer.removed' : 'buyer.deactivated'));
 	}

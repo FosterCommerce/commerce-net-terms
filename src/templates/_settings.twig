@@ -18,13 +18,13 @@
 
 <hr>
 
-{{ forms.selectField({
+{{ forms.lightswitchField({
 	label: 'settings.defaultSublimitMode'|t('net-terms'),
 	instructions: 'settings.defaultSublimitModeInstructions'|t('net-terms'),
 	id: 'defaultSublimitMode',
 	name: 'defaultSublimitMode',
-	value: settings.defaultSublimitMode,
-	options: sublimitModeOptions|map((label, value) => { label: label, value: value })|values,
+	value: 'reserved',
+	on: settings.defaultSublimitMode == 'reserved',
 	errors: settings.getErrors('defaultSublimitMode'),
 }) }}
 
@@ -40,61 +40,148 @@
 	errors: settings.getErrors('defaultPaymentTerms'),
 }) }}
 
-{{ forms.textField({
-	label: 'settings.invoicePath'|t('net-terms'),
-	instructions: 'settings.invoicePathInstructions'|t('net-terms'),
-	id: 'invoicePath',
-	name: 'invoicePath',
-	value: settings.invoicePath,
-	placeholder: 'account/invoice?number={number}',
-	errors: settings.getErrors('invoicePath'),
-}) }}
+{% if not isOrderBilling %}
+	{{ forms.textField({
+		label: 'settings.invoiceNumberPrefix'|t('net-terms'),
+		instructions: 'settings.invoiceNumberPrefixInstructions'|t('net-terms'),
+		id: 'invoiceNumberPrefix',
+		name: 'invoiceNumberPrefix',
+		value: settings.invoiceNumberPrefix,
+		placeholder: 'INV-',
+		maxlength: 20,
+		size: 10,
+		errors: settings.getErrors('invoiceNumberPrefix'),
+	}) }}
 
-{{ forms.textField({
-	label: 'settings.invoiceEmailTemplate'|t('net-terms'),
-	instructions: 'settings.invoiceEmailTemplateInstructions'|t('net-terms'),
-	id: 'invoiceEmailTemplate',
-	name: 'invoiceEmailTemplate',
-	value: settings.invoiceEmailTemplate,
-	placeholder: '_emails/net-terms-invoice',
-	errors: settings.getErrors('invoiceEmailTemplate'),
-}) }}
-
-{{ forms.textField({
-	label: 'settings.orderPath'|t('net-terms'),
-	instructions: 'settings.orderPathInstructions'|t('net-terms'),
-	id: 'orderPath',
-	name: 'orderPath',
-	value: settings.orderPath,
-	placeholder: 'account/net-terms-pay?number={number}',
-	errors: settings.getErrors('orderPath'),
-}) }}
+	{{ forms.textField({
+		label: 'settings.invoiceNumberStart'|t('net-terms'),
+		instructions: 'settings.invoiceNumberStartInstructions'|t('net-terms'),
+		id: 'invoiceNumberStart',
+		name: 'invoiceNumberStart',
+		inputmode: 'numeric',
+		size: 10,
+		value: '%06d'|format(settings.invoiceNumberStart),
+		errors: settings.getErrors('invoiceNumberStart'),
+	}) }}
+{% else %}
+	{# Post the invoice settings unchanged, since a save keeps only the settings it posts #}
+	{{ hiddenInput('invoiceNumberPrefix', settings.invoiceNumberPrefix) }}
+	{{ hiddenInput('invoiceNumberStart', settings.invoiceNumberStart) }}
+	{{ hiddenInput('invoicePath', settings.invoicePath) }}
+{% endif %}
 
 <hr>
 
-<h2>{{ 'settings.reminders'|t('net-terms') }}</h2>
-<p>{{ 'settings.remindersInstructions'|t('net-terms', { url: cpUrl('utilities/system-messages') })|md(inlineOnly: true) }}</p>
+<h2>{{ 'settings.emails'|t('net-terms') }}</h2>
 
-{{ forms.textField({
-	label: 'settings.dueSoonReminderDays'|t('net-terms'),
-	instructions: 'settings.dueSoonReminderDaysInstructions'|t('net-terms'),
-	id: 'dueSoonReminderDays',
-	name: 'dueSoonReminderDays',
-	type: 'number',
-	min: 1,
-	size: 6,
-	value: settings.dueSoonReminderDays,
-	errors: settings.getErrors('dueSoonReminderDays'),
-}) }}
+{% if not isOrderBilling %}
+	{{ forms.textField({
+		label: 'settings.invoicePath'|t('net-terms'),
+		instructions: 'settings.invoicePathInstructions'|t('net-terms'),
+		id: 'invoicePath',
+		name: 'invoicePath',
+		value: settings.invoicePath,
+		placeholder: 'account/invoice?number={number}',
+		errors: settings.getErrors('invoicePath'),
+	}) }}
+{% endif %}
 
-{{ forms.textField({
-	label: 'settings.overdueReminderDays'|t('net-terms'),
-	instructions: 'settings.overdueReminderDaysInstructions'|t('net-terms'),
-	id: 'overdueReminderDays',
-	name: 'overdueReminderDays',
-	type: 'number',
-	min: 0,
-	size: 6,
-	value: settings.overdueReminderDays,
-	errors: settings.getErrors('overdueReminderDays'),
-}) }}
+{% if isOrderBilling %}
+	{{ forms.editableTableField({
+		label: 'settings.reminders'|t('net-terms'),
+		instructions: 'settings.remindersOrdersInstructions'|t('net-terms', { url: cpUrl('commerce/settings/emails') }),
+		id: 'reminders',
+		name: 'reminders',
+		cols: {
+			days: {
+				type: 'number',
+				heading: 'settings.reminderDays'|t('net-terms'),
+				thin: true,
+			},
+			type: {
+				type: 'select',
+				heading: 'settings.reminderTiming'|t('net-terms'),
+				options: [
+					{ label: 'settings.reminderBefore'|t('net-terms'), value: 'dueSoon' },
+					{ label: 'settings.reminderAfter'|t('net-terms'), value: 'overdue' },
+				],
+			},
+			emailUid: {
+				type: 'select',
+				heading: 'settings.reminderEmail'|t('net-terms'),
+				options: [{ label: 'settings.chooseEmail'|t('net-terms'), value: '' }]|merge(commerceEmails|map(email => { label: email.name, value: email.uid })|values),
+			},
+			enabled: {
+				type: 'lightswitch',
+				heading: 'settings.reminderEnabled'|t('net-terms'),
+				thin: true,
+			},
+		},
+		rows: settings.reminders,
+		defaultValues: { type: 'dueSoon', enabled: true },
+		allowAdd: true,
+		allowDelete: true,
+		allowReorder: true,
+		addRowLabel: 'settings.addReminder'|t('net-terms'),
+		errors: settings.getErrors('reminders'),
+	}) }}
+
+	{# Post the invoice PDF settings unchanged, since a save keeps only the settings it posts #}
+	{{ hiddenInput('invoicePdfTemplate', settings.invoicePdfTemplate) }}
+	{{ hiddenInput('invoicePdfPaperSize', settings.invoicePdfPaperSize) }}
+	{{ hiddenInput('invoicePdfOrientation', settings.invoicePdfOrientation) }}
+{% else %}
+	{% embed '_includes/forms/field' with {
+		label: 'settings.reminders'|t('net-terms'),
+		instructions: 'settings.remindersInvoiceInstructions'|t('net-terms', { url: cpUrl('net-terms/emails') }),
+	} %}
+		{% block input %}{% endblock %}
+	{% endembed %}
+
+	<hr>
+
+	<h2>{{ 'settings.invoicePdf'|t('net-terms') }}</h2>
+
+	{{ forms.autoSuggestField({
+		label: 'settings.invoicePdfTemplate'|t('net-terms'),
+		instructions: 'settings.invoicePdfTemplateInstructions'|t('net-terms'),
+		id: 'invoicePdfTemplate',
+		name: 'invoicePdfTemplate',
+		value: settings.invoicePdfTemplate,
+		suggestions: craft.cp.getTemplateSuggestions(),
+		errors: settings.getErrors('invoicePdfTemplate'),
+	}) }}
+
+	{{ forms.selectField({
+		label: 'settings.invoicePdfPaperSize'|t('net-terms'),
+		id: 'invoicePdfPaperSize',
+		name: 'invoicePdfPaperSize',
+		value: settings.invoicePdfPaperSize,
+		options: [
+			{ label: 'settings.paperLetter'|t('net-terms'), value: 'letter' },
+			{ label: 'settings.paperLegal'|t('net-terms'), value: 'legal' },
+			{ label: 'settings.paperA4'|t('net-terms'), value: 'a4' },
+		],
+		errors: settings.getErrors('invoicePdfPaperSize'),
+	}) }}
+
+	{{ forms.selectField({
+		label: 'settings.invoicePdfOrientation'|t('net-terms'),
+		id: 'invoicePdfOrientation',
+		name: 'invoicePdfOrientation',
+		value: settings.invoicePdfOrientation,
+		options: [
+			{ label: 'settings.pdfPortrait'|t('net-terms'), value: 'portrait' },
+			{ label: 'settings.pdfLandscape'|t('net-terms'), value: 'landscape' },
+		],
+		errors: settings.getErrors('invoicePdfOrientation'),
+	}) }}
+
+	{# Post the order-billing reminders unchanged, since a save keeps only the settings it posts #}
+	{% for reminder in settings.reminders %}
+		{% set reminderIndex = loop.index0 %}
+		{% for key, value in reminder %}
+			{{ hiddenInput("reminders[#{reminderIndex}][#{key}]", value is same as(true) ? '1' : (value is same as(false) ? '' : value)) }}
+		{% endfor %}
+	{% endfor %}
+{% endif %}

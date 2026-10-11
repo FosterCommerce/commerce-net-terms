@@ -17,20 +17,19 @@ use craft\elements\User;
 use craft\events\DefineElementDeletionBlockersEvent;
 use craft\events\ModelEvent;
 use craft\events\RegisterComponentTypesEvent;
-use craft\events\RegisterEmailMessagesEvent;
 use craft\events\RegisterUrlRulesEvent;
 use craft\events\RegisterUserPermissionsEvent;
 use craft\helpers\Queue;
 use craft\helpers\StringHelper;
+use craft\helpers\UrlHelper;
 use craft\services\Fields;
-use craft\services\SystemMessages;
 use craft\services\UserPermissions;
+use craft\web\Response as WebResponse;
 use craft\web\twig\variables\CraftVariable;
 use craft\web\UrlManager;
 use fostercommerce\netterms\elements\InvoicedOrdersBlocker;
 use fostercommerce\netterms\elements\LedgerUsersBlocker;
 use fostercommerce\netterms\enums\Billing;
-use fostercommerce\netterms\enums\SublimitMode;
 use fostercommerce\netterms\fields\PaymentTerms;
 use fostercommerce\netterms\gateways\NetTerms;
 use fostercommerce\netterms\helpers\Amounts;
@@ -39,6 +38,7 @@ use fostercommerce\netterms\models\Entry;
 use fostercommerce\netterms\models\Settings;
 use fostercommerce\netterms\services\Accounts;
 use fostercommerce\netterms\services\CreditOrders;
+use fostercommerce\netterms\services\Emails;
 use fostercommerce\netterms\services\Invoices;
 use fostercommerce\netterms\services\Ledger;
 use fostercommerce\netterms\services\Payments;
@@ -54,6 +54,7 @@ use yii\base\Event;
  * @property-read Invoices $invoices
  * @property-read Payments $payments
  * @property-read CreditOrders $creditOrders
+ * @property-read Emails $emails
  * @property-read Reminders $reminders
  */
 class Plugin extends BasePlugin
@@ -64,11 +65,15 @@ class Plugin extends BasePlugin
 
 	public const PERMISSION_MANAGE_PAYMENTS = 'net-terms-managePayments';
 
+	public const PERMISSION_MANAGE_EMAILS = 'net-terms-manageEmails';
+
 	public bool $hasCpSection = true;
 
 	public bool $hasCpSettings = true;
 
-	public string $schemaVersion = '1.0.0';
+	public bool $hasReadOnlyCpSettings = true;
+
+	public string $schemaVersion = '2.0.0';
 
 	/**
 	 * @var array<int, string>
@@ -87,6 +92,7 @@ class Plugin extends BasePlugin
 				'invoices' => Invoices::class,
 				'payments' => Payments::class,
 				'creditOrders' => CreditOrders::class,
+				'emails' => Emails::class,
 				'reminders' => Reminders::class,
 			],
 		];
@@ -113,14 +119,6 @@ class Plugin extends BasePlugin
 			Gateways::EVENT_REGISTER_GATEWAY_TYPES,
 			static function (RegisterComponentTypesEvent $event): void {
 				$event->types[] = NetTerms::class;
-			},
-		);
-
-		Event::on(
-			SystemMessages::class,
-			SystemMessages::EVENT_REGISTER_MESSAGES,
-			function (RegisterEmailMessagesEvent $event): void {
-				$event->messages = [...$event->messages, ...$this->getReminders()->getSystemMessages()];
 			},
 		);
 
@@ -209,6 +207,14 @@ class Plugin extends BasePlugin
 		return $creditOrders;
 	}
 
+	public function getEmails(): Emails
+	{
+		/** @var Emails $emails */
+		$emails = $this->get('emails');
+
+		return $emails;
+	}
+
 	public function getReminders(): Reminders
 	{
 		/** @var Reminders $reminders */
@@ -243,22 +249,40 @@ class Plugin extends BasePlugin
 			'url' => 'net-terms/payments',
 		];
 
+		if ($this->getBilling() === Billing::Invoices && Craft::$app->getUser()->checkPermission(self::PERMISSION_MANAGE_EMAILS)) {
+			$navItem['subnav']['emails'] = [
+				'label' => Craft::t(self::HANDLE, 'nav.emails'),
+				'url' => 'net-terms/emails',
+			];
+		}
+
+		// Show settings to admins only, as Commerce does
+		if (Craft::$app->getUser()->getIsAdmin()) {
+			$navItem['subnav']['settings'] = [
+				'label' => Craft::t(self::HANDLE, 'nav.settings'),
+				'url' => 'net-terms/settings',
+			];
+		}
+
 		return $navItem;
+	}
+
+	public function getSettingsResponse(): mixed
+	{
+		/** @var WebResponse $response */
+		$response = Craft::$app->getResponse();
+
+		return $response->redirect(UrlHelper::cpUrl('net-terms/settings'));
+	}
+
+	public function getReadOnlySettingsResponse(): mixed
+	{
+		return $this->getSettingsResponse();
 	}
 
 	protected function createSettingsModel(): ?Model
 	{
 		return new Settings();
-	}
-
-	protected function settingsHtml(): ?string
-	{
-		return Craft::$app->getView()->renderTemplate('net-terms/_settings', [
-			'settings' => $this->getSettings(),
-			'sublimitModeOptions' => SublimitMode::labelMap(),
-			'netTermsGateway' => $this->getNetTermsGateway(),
-			'isOrderBilling' => $this->getBilling() === Billing::Orders,
-		]);
 	}
 
 	/**
@@ -335,7 +359,7 @@ class Plugin extends BasePlugin
 			},
 		);
 
-		// Refuse from code and the order page too, which skip the blockers
+		// Refuse the delete from code and the order page, since only the element index runs blockers
 		// Refuse trashing too, since a trashed order is later deleted for good with its invoiced entries
 		Event::on(
 			Order::class,
@@ -388,10 +412,15 @@ class Plugin extends BasePlugin
 				$event->rules['net-terms/accounts/<accountId:\d+>'] = 'net-terms/accounts/edit';
 				$event->rules['net-terms/accounts/<accountId:\d+>/<tab:buyers|invoices|orders|payments|ledger>'] = 'net-terms/accounts/edit';
 				$event->rules['net-terms/invoices'] = 'net-terms/invoices/index';
+				$event->rules['net-terms/invoices/new'] = 'net-terms/invoices/edit';
 				$event->rules['net-terms/invoices/<invoiceId:\d+>'] = 'net-terms/invoices/view';
 				$event->rules['net-terms/payments'] = 'net-terms/payments/index';
 				$event->rules['net-terms/payments/new'] = 'net-terms/payments/edit';
 				$event->rules['net-terms/payments/<paymentId:\d+>'] = 'net-terms/payments/view';
+				$event->rules['net-terms/emails'] = 'net-terms/emails/index';
+				$event->rules['net-terms/emails/new'] = 'net-terms/emails/edit';
+				$event->rules['net-terms/emails/<emailId:\d+>'] = 'net-terms/emails/edit';
+				$event->rules['net-terms/settings'] = 'net-terms/settings/index';
 			},
 		);
 	}
@@ -410,6 +439,9 @@ class Plugin extends BasePlugin
 						],
 						self::PERMISSION_MANAGE_PAYMENTS => [
 							'label' => Craft::t(self::HANDLE, 'permissions.managePayments'),
+						],
+						self::PERMISSION_MANAGE_EMAILS => [
+							'label' => Craft::t(self::HANDLE, 'permissions.manageEmails'),
 						],
 					],
 				];

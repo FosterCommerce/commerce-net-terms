@@ -1,0 +1,5 @@
+{%- switch email.trigger.value -%}
+	{%- case 'issued' -%}{{ 'email.scheduleIssued'|t('net-terms') }}
+	{%- case 'dueSoon' -%}{{ 'email.scheduleBefore'|t('net-terms', { days: email.days }) }}
+	{%- default -%}{{ 'email.scheduleAfter'|t('net-terms', { days: email.days }) }}
+{%- endswitch -%}

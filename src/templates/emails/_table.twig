@@ -1,0 +1,26 @@
+<table class="data fullwidth collapsible">
+	<colgroup>
+		<col class="nt-col-name">
+		<col class="nt-col-schedule">
+		<col class="nt-col-status">
+	</colgroup>
+	<thead>
+		<tr>
+			<th>{{ 'email.name'|t('net-terms') }}</th>
+			<th>{{ 'email.schedule'|t('net-terms') }}</th>
+			<th>{{ 'email.status'|t('net-terms') }}</th>
+		</tr>
+	</thead>
+	<tbody>
+		{% for email in emails %}
+			<tr>
+				<th scope="row"><a href="{{ url('net-terms/emails/' ~ email.id) }}">{{ email.name }}</a></th>
+				<td>{% include 'net-terms/emails/_schedule' %}</td>
+				<td>
+					<span class="status {{ email.enabled ? 'enabled' : 'disabled' }}"></span>
+					{{ (email.enabled ? 'email.enabled' : 'email.disabled')|t('net-terms') }}
+				</td>
+			</tr>
+		{% endfor %}
+	</tbody>
+</table>

@@ -102,4 +102,11 @@ trait RequestParamsTrait
 
 		return is_string($value) ? trim($value) : '';
 	}
+
+	private function getOptionalTextParam(string $name): ?string
+	{
+		$value = $this->getTextParam($name);
+
+		return $value !== '' ? $value : null;
+	}
 }

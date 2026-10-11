@@ -35,6 +35,7 @@ use fostercommerce\netterms\records\ApplicationRecord;
 use fostercommerce\netterms\records\CreditOrderRecord;
 use Money\Currency;
 use Money\Money;
+use Money\Number;
 use yii\base\Component;
 use yii\base\InvalidConfigException;
 
@@ -263,10 +264,6 @@ class CreditOrders extends Component
 				$capture = $this->writeCapture($authorization, $payment, $amount);
 				$this->saveApplication($payment, $order, $capture, $amount);
 			}
-
-			foreach ($allocations as [$order]) {
-				$order->updateOrderPaidInformation();
-			}
 		});
 	}
 
@@ -348,10 +345,6 @@ class CreditOrders extends Component
 			/** @var Transaction $capture */
 			$capture = $this->getCommerce()->getTransactions()->getTransactionById((int) $application->transactionId);
 			$this->writeRefund($capture, $applied, Craft::t(Plugin::HANDLE, 'transaction.reversed'), self::REVERSAL_TRANSACTION_CODE);
-
-			/** @var Order $order */
-			$order = $capture->getOrder();
-			$order->updateOrderPaidInformation();
 		});
 	}
 
@@ -401,8 +394,6 @@ class CreditOrders extends Component
 				// Refund only what the order is overpaid, since a refund given before the edit already returned the rest
 				$this->refundCut($order, $charge, Money::min($change->negative(), $outstanding->negative()), $editKey, $authorId);
 			}
-
-			$order->updateOrderPaidInformation();
 		});
 	}
 
@@ -616,7 +607,7 @@ class CreditOrders extends Component
 	private function setTransactionAmount(Transaction $transaction, Money $amount): void
 	{
 		$transaction->amount = (float) Amounts::toDecimal($amount);
-		$transaction->paymentAmount = CurrencyHelper::round((float) Amounts::toDecimal($amount->multiply((string) $transaction->paymentRate)), (string) $transaction->paymentCurrency);
+		$transaction->paymentAmount = CurrencyHelper::round((float) Amounts::toDecimal($amount->multiply((string) Number::fromFloat($transaction->paymentRate))), (string) $transaction->paymentCurrency);
 	}
 
 	private function saveApplication(Payment $payment, Order $order, Transaction $capture, Money $amount): void

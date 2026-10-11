@@ -9,6 +9,7 @@ use craft\db\Migration;
 use craft\db\Table as CraftTable;
 use fostercommerce\netterms\db\Table;
 use fostercommerce\netterms\enums\AccountStatus;
+use fostercommerce\netterms\Plugin;
 
 class Install extends Migration
 {
@@ -17,6 +18,7 @@ class Install extends Migration
 		$this->createTables();
 		$this->createIndexes();
 		$this->addForeignKeys();
+		Plugin::getInstance()->getEmails()->createStarterEmails();
 
 		return true;
 	}
@@ -24,6 +26,7 @@ class Install extends Migration
 	public function safeDown(): bool
 	{
 		$this->dropTableIfExists(Table::REMINDERS);
+		$this->dropTableIfExists(Table::EMAILS);
 		$this->dropTableIfExists(Table::ORDERS);
 		$this->dropTableIfExists(Table::ENTRIES);
 		$this->dropTableIfExists(Table::APPLICATIONS);
@@ -67,9 +70,11 @@ class Install extends Migration
 			'id' => $this->primaryKey(),
 			'accountId' => $this->integer()->notNull(),
 			'number' => $this->string(32)->notNull(),
-			'dateIssued' => $this->dateTime()->notNull(),
+			// Null for a draft
+			'dateIssued' => $this->dateTime(),
 			'dateDue' => $this->dateTime()->notNull(),
 			'dateVoided' => $this->dateTime(),
+			'notes' => $this->text(),
 			'dateCreated' => $this->dateTime()->notNull(),
 			'dateUpdated' => $this->dateTime()->notNull(),
 			'uid' => $this->uid(),
@@ -95,10 +100,33 @@ class Install extends Migration
 			'uid' => $this->uid(),
 		]);
 
+		$this->createTable(Table::EMAILS, [
+			'id' => $this->primaryKey(),
+			'name' => $this->string()->notNull(),
+			'trigger' => $this->string(20)->notNull(),
+			'days' => $this->integer(),
+			'enabled' => $this->boolean()->notNull()->defaultValue(true),
+			'sendToHolder' => $this->boolean()->notNull()->defaultValue(true),
+			'sendToBuyers' => $this->boolean()->notNull()->defaultValue(false),
+			'ccAddresses' => $this->text(),
+			'bccAddresses' => $this->text(),
+			'replyTo' => $this->string(),
+			'senderName' => $this->string(),
+			'senderAddress' => $this->string(),
+			'subject' => $this->text()->notNull(),
+			'body' => $this->text()->notNull(),
+			'attachPdf' => $this->boolean()->notNull()->defaultValue(false),
+			'dateCreated' => $this->dateTime()->notNull(),
+			'dateUpdated' => $this->dateTime()->notNull(),
+			'uid' => $this->uid(),
+		]);
+
 		// One row per reminder sent, so each is sent once per invoice or order
 		$this->createTable(Table::REMINDERS, [
 			'id' => $this->primaryKey(),
 			'type' => $this->string(20)->notNull(),
+			'days' => $this->integer()->notNull(),
+			'emailId' => $this->integer(),
 			'invoiceId' => $this->integer(),
 			'orderId' => $this->integer(),
 			'dateCreated' => $this->dateTime()->notNull(),
@@ -163,8 +191,8 @@ class Install extends Migration
 		$this->createIndex(null, Table::INVOICES, ['accountId'], false);
 		$this->createIndex(null, Table::INVOICE_LINES, ['invoiceId'], false);
 		$this->createIndex(null, Table::PAYMENTS, ['accountId'], false);
-		$this->createIndex(null, Table::REMINDERS, ['type', 'invoiceId'], true);
-		$this->createIndex(null, Table::REMINDERS, ['type', 'orderId'], true);
+		$this->createIndex(null, Table::REMINDERS, ['emailId', 'type', 'days', 'invoiceId'], true);
+		$this->createIndex(null, Table::REMINDERS, ['type', 'days', 'orderId'], true);
 		$this->createIndex(null, Table::ORDERS, ['orderId'], true);
 		$this->createIndex(null, Table::ORDERS, ['accountId'], false);
 		$this->createIndex(null, Table::APPLICATIONS, ['paymentId'], false);
@@ -193,6 +221,7 @@ class Install extends Migration
 		$this->addForeignKey(null, Table::PAYMENTS, ['accountId'], Table::ACCOUNTS, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::PAYMENTS, ['authorId'], CraftTable::USERS, ['id'], 'SET NULL');
 
+		$this->addForeignKey(null, Table::REMINDERS, ['emailId'], Table::EMAILS, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::REMINDERS, ['invoiceId'], Table::INVOICES, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::REMINDERS, ['orderId'], CommerceTable::ORDERS, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::ORDERS, ['orderId'], CommerceTable::ORDERS, ['id'], 'CASCADE');

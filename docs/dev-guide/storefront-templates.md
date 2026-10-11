@@ -1,6 +1,6 @@
 # Storefront templates
 
-Show a customer their account and what it owes, let the people who manage it set sublimits, and in order billing take payment of an order's balance. The plugin does not ship storefront pages. You build them with `craft.netTerms` and two controller actions.
+Show a customer their account and what it owes, let the people who manage it set sublimits, and in order billing take payment of an order's balance. The plugin does not ship storefront pages. You build them with `craft.netTerms` and the plugin's storefront actions.
 
 `craft.netTerms` returns only accounts the signed-in user can see: the holder's, one they are an active buyer on, or one they can manage. Who can manage an account is the holder by default; see [company accounts](./company-accounts.md) to change that.
 
@@ -37,7 +37,7 @@ Amounts are [Money](https://www.moneyphp.org/) objects. Format them with Craft's
 
 ## Managing buyers
 
-To set a buyer's sublimit, post to `net-terms/storefront/save-buyer`. To add a user as a buyer, send `userId` instead of `buyerId`. A blank `sublimit` means no sublimit. The action accepts any user unless a site module limits who; see [events](../reference/events.md#accountsevent_define_buyer_eligibility).
+To set a buyer's sublimit, post to `net-terms/storefront/save-buyer`. To add a user as a buyer, send `userId` instead of `buyerId`. A blank `sublimit` means no sublimit. The action refuses to add a user unless an `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` handler allows them; see [events](../reference/events.md#accountsevent_define_buyer_eligibility).
 
 ```twig
 {% if craft.netTerms.canManage(account) %}
@@ -59,7 +59,7 @@ To set a buyer's sublimit, post to `net-terms/storefront/save-buyer`. To add a u
 {% endif %}
 ```
 
-To remove a buyer, post `accountId` and `buyerId` to `net-terms/storefront/remove-buyer`. The action deactivates a buyer with ledger entries or credit orders instead of removing them. Adding that user again reactivates them.
+To remove a buyer, post `accountId` and `buyerId` to `net-terms/storefront/remove-buyer`. The action deactivates a buyer with ledger entries or orders instead of removing them. Adding that user again reactivates them.
 
 Both actions return a 403 for a user who can't manage the account. When a sublimit doesn't save, the action flashes the reason, such as a sublimit below what the buyer owes.
 
@@ -103,7 +103,7 @@ Pay a completed order's balance with Commerce's own `commerce/payments/pay` acti
 
 This form charges the order's whole balance. The payment is a Commerce transaction on the order, and the order's balance and what the buyer owes go down by its amount. Net Terms does not record it as a payment.
 
-To link order reminders to this page, set **Storefront order path** to its path, such as `account/net-terms-pay?number={number}`; see [configuration](../reference/configuration.md).
+To link order reminders to this page, link to it from the reminder's Commerce email template; see [order billing emails](../user-guide/reminders.md#order-billing-emails).
 
 ## `craft.netTerms`
 
@@ -118,13 +118,14 @@ To link order reminders to this page, set **Storefront order path** to its path,
 | `getOwedByBuyer(buyer)` | What the buyer owes. |
 | `getUnappliedCredit(account)` | Money received and not yet applied. |
 | `canManage(account)` | Whether the user can manage buyers and sublimits. |
-| `getInvoices(account)` | The account's invoices, newest first. |
-| `getInvoiceByNumber(number)` | One invoice. |
+| `getInvoices(account)` | The account's issued invoices, newest first. Drafts are left out. |
+| `getInvoiceByNumber(number)` | One issued invoice. |
+| `getInvoicePdfUrl(invoice)` | A link that opens the invoice PDF for a signed-in user, or `null` when they can't view the invoice. |
 | `getOpenLines(account)` | Invoice lines with a balance, oldest due first. |
 | `getInvoiceTotal(invoice)`, `getInvoiceBalance(invoice)`, `getInvoiceStatus(invoice)` | Invoice figures. |
 | `getLineAmount(line)`, `getLineBalance(line)` | Invoice line figures. |
 | `getBilling()` | `invoices` or `orders`, as a `Billing` enum. |
-| `getOrders(account, openOnly)` | In order billing, the account's credit orders, newest first, or with `true` only those with a balance, oldest first. |
+| `getOrders(account, openOnly)` | In order billing, the orders charged to the account, newest first, or with `true` only those with a balance, oldest first. |
 | `getOrderBalance(order)`, `getOrderDateDue(order)`, `getIsOrderOverdue(order)` | Order figures, in order billing. |
 | `toNumber(money)` | An amount as a localized number, for a form input. |
 

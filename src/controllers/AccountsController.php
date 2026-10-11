@@ -117,8 +117,8 @@ class AccountsController extends Controller
 		$sublimitMode = $this->request->getBodyParam('sublimitMode');
 		$account->sublimitMode = match (true) {
 			$sublimitMode === null, $sublimitMode === '' => null,
-			is_string($sublimitMode) => SublimitMode::tryFrom($sublimitMode) ?? throw new BadRequestHttpException('Invalid sublimit mode.'),
-			default => throw new BadRequestHttpException('Invalid sublimit mode.'),
+			is_string($sublimitMode) => SublimitMode::tryFrom($sublimitMode) ?? throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'error.invalidSublimitMode')),
+			default => throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'error.invalidSublimitMode')),
 		};
 
 		// Refuse terms that aren't whole days, rather than rounding or blanking them
@@ -131,7 +131,7 @@ class AccountsController extends Controller
 		$account->paymentTerms = $paymentTermsDays === false ? null : $paymentTermsDays;
 
 		$status = $this->request->getBodyParam('status');
-		$account->status = (is_string($status) ? AccountStatus::tryFrom($status) : null) ?? throw new BadRequestHttpException('Invalid status.');
+		$account->status = (is_string($status) ? AccountStatus::tryFrom($status) : null) ?? throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'error.invalidStatus'));
 
 		$account->unlimited = (bool) $this->request->getBodyParam('unlimited');
 
@@ -217,7 +217,11 @@ class AccountsController extends Controller
 		$account = $this->requireAccountParam();
 		$buyer = $this->requireBuyerOnAccount($account, $this->requireIdParam('buyerId'));
 
-		$plugin->getAccounts()->removeBuyer($buyer);
+		try {
+			$plugin->getAccounts()->removeBuyer($buyer);
+		} catch (LedgerException $ledgerException) {
+			return $this->asFailure($ledgerException->getMessage());
+		}
 
 		return $this->asSuccess(Craft::t(Plugin::HANDLE, $buyer->active ? 'buyer.removed' : 'buyer.deactivated'));
 	}

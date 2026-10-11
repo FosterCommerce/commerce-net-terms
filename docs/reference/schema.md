@@ -26,7 +26,7 @@ Users who can charge to an account.
 | `accountId` | int | Foreign key to `netterms_accounts`, cascade. Unique with `userId`. |
 | `userId` | int | Foreign key to `users`, cascade. |
 | `sublimit` | decimal | Null for no sublimit. |
-| `active` | bool | False for a removed buyer with ledger entries or credit orders. Default true. |
+| `active` | bool | False for a removed buyer with ledger entries or orders. Default true. |
 
 ## netterms_entries
 
@@ -48,16 +48,17 @@ The ledger, in invoice billing. The plugin does not change an entry's amount. Pe
 
 ## netterms_invoices
 
-Issued invoices, in invoice billing.
+Invoices and drafts, in invoice billing.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | int | Primary key. |
 | `accountId` | int | Foreign key to `netterms_accounts`, cascade. |
-| `number` | string | Unique. `CL-` and a six-digit sequence. |
-| `dateIssued` | datetime | |
+| `number` | string | Unique. The invoice number prefix and a six-digit number. |
+| `dateIssued` | datetime | Null for a draft. |
 | `dateDue` | datetime | |
 | `dateVoided` | datetime | Null until voided. |
+| `notes` | text | |
 
 ## netterms_invoice_lines
 
@@ -82,14 +83,33 @@ Which account and buyer each order charged, in order billing. What the order owe
 
 ## netterms_reminders
 
-One row per reminder sent, so each is sent once per invoice or order.
+One row per reminder sent. Unique on `emailId`, `type`, `days` and `invoiceId`, and on `type`, `days` and `orderId`, so each reminder sends once per bill and schedule.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | int | Primary key. |
-| `type` | string | `dueSoon` or `overdue`. Unique with `invoiceId`, and with `orderId`. |
+| `type` | string | `dueSoon` or `overdue`. |
+| `days` | int | The reminder's days before or after the due date. |
+| `emailId` | int | Foreign key to `netterms_emails`, cascade. Null for an order reminder. |
 | `invoiceId` | int | Foreign key to `netterms_invoices`, cascade. Null for an order reminder. |
 | `orderId` | int | Foreign key to `commerce_orders`, cascade. Null for an invoice reminder. |
+
+## netterms_emails
+
+The invoice email and reminders, in invoice billing. Edited in **Net Terms -> Emails**.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | int | Primary key. |
+| `name` | string | |
+| `trigger` | string | `issued`, `dueSoon` or `overdue`. One email is `issued`. |
+| `days` | int | Days before or after the due date. Null for the invoice email. |
+| `enabled` | bool | |
+| `sendToHolder`, `sendToBuyers` | bool | The recipients. |
+| `ccAddresses`, `bccAddresses` | text | Comma-separated. |
+| `replyTo`, `senderName`, `senderAddress` | string | Null to use Craft's email settings. |
+| `subject`, `body` | text | Twig. The body is Markdown. |
+| `attachPdf` | bool | |
 
 ## netterms_payments
 

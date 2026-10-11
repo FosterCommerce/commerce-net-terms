@@ -10,6 +10,8 @@ final class Table
 
 	public const BUYERS = '{{%netterms_buyers}}';
 
+	public const EMAILS = '{{%netterms_emails}}';
+
 	public const ENTRIES = '{{%netterms_entries}}';
 
 	public const INVOICES = '{{%netterms_invoices}}';

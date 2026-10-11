@@ -13,9 +13,10 @@ use fostercommerce\netterms\db\Table;
  * @property int $id
  * @property int $accountId
  * @property string $number
- * @property string $dateIssued
+ * @property string|null $dateIssued
  * @property string $dateDue
  * @property string|null $dateVoided
+ * @property string|null $notes
  */
 class InvoiceRecord extends ActiveRecord
 {

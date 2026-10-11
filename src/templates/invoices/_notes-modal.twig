@@ -1,0 +1,14 @@
+{% import '_includes/forms' as forms %}
+
+<h2>{{ 'invoice.editNotes'|t('net-terms') }}</h2>
+
+{{ hiddenInput('invoiceId', invoice.id) }}
+
+{{ forms.textareaField({
+	label: 'invoice.notes'|t('net-terms'),
+	instructions: 'invoice.notesInstructions'|t('net-terms'),
+	id: 'invoiceNotes',
+	name: 'notes',
+	value: invoice.notes,
+	rows: 4,
+}) }}

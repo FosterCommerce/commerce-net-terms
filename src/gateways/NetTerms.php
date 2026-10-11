@@ -103,7 +103,7 @@ class NetTerms extends Gateway
 			'gateway' => $this,
 			'availableCredit' => $availableCredit,
 			// Without an order the form can't check credit, so show the button and leave the decline to the charge
-			'canCharge' => ! $order instanceof Order || ($buyer instanceof Buyer && (! $availableCredit instanceof Money || ($outstanding instanceof Money && $availableCredit->greaterThanOrEqual($outstanding)))),
+			'canCharge' => ! $order instanceof Order || ($buyer instanceof Buyer && $outstanding instanceof Money && Plugin::getInstance()->getAccounts()->canCharge($buyer, $outstanding)),
 			'submitButtonClasses' => $params['submitButtonClasses'] ?? '',
 			'submitButtonText' => $params['submitButtonText'] ?? Craft::t(Plugin::HANDLE, 'gateway.submitButton'),
 		], View::TEMPLATE_MODE_CP);
@@ -170,7 +170,7 @@ class NetTerms extends Gateway
 		}
 
 		$ledger = Plugin::getInstance()->getLedger();
-		$charge = $parent->hash !== null ? $ledger->getChargeByTransactionHash($parent->hash) : null;
+		$charge = $ledger->getChargeByTransactionHash((string) $parent->hash);
 
 		if ($charge === null) {
 			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'gateway.chargeNotFound'));
@@ -290,7 +290,7 @@ class NetTerms extends Gateway
 		return $plugin->getLedger()->withAccountLock((int) $buyer->accountId, function () use ($plugin, $buyer, $order, $transaction): NetTermsResponse {
 			$isAuthorization = $transaction->type === TransactionRecord::TYPE_AUTHORIZE;
 
-			// Approve a second authorization of an order already linked only within its limits, since what it owes already counts its current total
+			// Re-approve a linked order unless the account or buyer is over its limit, since what is owed already includes the order
 			if ($isAuthorization && $plugin->getCreditOrders()->isCreditOrder($order)) {
 				$account = $buyer->getAccount();
 				$isOver = $plugin->getAccounts()->getOverLimit($account) instanceof Money

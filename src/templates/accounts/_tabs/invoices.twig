@@ -1,8 +1,7 @@
 {% if canManagePayments %}
 	<div class="nt-section-header">
 		<div class="buttons">
-			<button type="button" class="btn" data-nt-action="net-terms/invoices/issue" data-nt-params="{{ { accountId: account.id }|json_encode }}" data-nt-confirm="invoice.issueConfirm">{{ 'invoice.issue'|t('net-terms') }}</button>
-			<button type="button" class="btn" data-nt-action="net-terms/invoices/issue" data-nt-params="{{ { accountId: account.id, send: 1 }|json_encode }}" data-nt-confirm="invoice.issueConfirm">{{ 'invoice.issueAndSend'|t('net-terms') }}</button>
+			<a class="btn add icon" href="{{ url('net-terms/invoices/new', { accountId: account.id }) }}">{{ 'invoice.new'|t('net-terms') }}</a>
 		</div>
 	</div>
 {% endif %}

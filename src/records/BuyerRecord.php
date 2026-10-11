@@ -15,6 +15,8 @@ use fostercommerce\netterms\db\Table;
  * @property int $userId
  * @property string|null $sublimit
  * @property bool $active
+ * @property string $dateCreated
+ * @property string $dateUpdated
  */
 class BuyerRecord extends ActiveRecord
 {
