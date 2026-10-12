@@ -42,7 +42,7 @@ Net Terms writes each amount you apply to the order as a Commerce capture of the
 
 ## Paying an order's balance online
 
-The Net Terms gateway is never offered on a completed order. Every gateway whose **Match Order** conditions match a completed order can pay its balance. To keep a gateway to checkout only, add Commerce's **Completed** rule to its **Match Order** conditions in **Commerce -> Settings -> Gateways**, turned off. A payment made online is a Commerce transaction on the order, and Net Terms does not record it as a payment. For the storefront page, see [storefront templates](../dev-guide/storefront-templates.md#paying-an-orders-balance).
+The Net Terms gateway is never available on a completed order. Every gateway whose **Match Order** conditions match a completed order can pay its balance. To keep a gateway to checkout only, add Commerce's **Completed** rule to its **Match Order** conditions in **Commerce -> Settings -> Gateways**, turned off. A payment made online is a Commerce transaction on the order, and Net Terms does not record it as a payment. For the storefront page, see [storefront templates](../dev-guide/storefront-templates.md#paying-an-orders-balance).
 
 To take a card payment by phone, record it with the **Card** method instead.
 

@@ -6,7 +6,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 
 ## Overview
 
-- Sell to business customers on terms through your normal checkout: open an account with payment terms and a limit (Net 30 on $10,000), or no limit when a customer only needs billing, and offer Net Terms beside your other payment methods.
+- Sell to business customers on terms through your normal checkout: open an account with payment terms and a limit (Net 30 on $10,000), or no limit when a customer only needs billing, and list Net Terms beside your other payment methods.
 - Control spending per person: give each buyer a sublimit (an office manager can owe up to $2,000), set by your staff, or by the company's own admins from storefront templates you build.
 - Keep receivables in Craft: invoice each account with one line per buyer, or bill by the orders themselves, leaving each one unpaid under a label like "Pay via check/ACH" for the customer to pay later, online or by check.
 - Apply each check, ACH, wire or card payment the way the remittance says, split across the invoices or orders it covers.
@@ -15,7 +15,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 
 ## How it works
 
-You create an account for a customer, set its credit limit, and add the users who can buy on it. The holder is a buyer from the start. At checkout, Commerce offers the Net Terms gateway only to those buyers, and the gateway declines an order that is more than the buyer's available credit. The gateway's payment type in Commerce sets how you bill: on invoices the plugin issues, or by the orders themselves. Money you receive doesn't reopen a buyer's credit until you apply it to their invoice line or order, so you decide which balance a payment clears.
+You create an account for a customer, set its credit limit, and add the users who can buy on it. The holder is a buyer from the start. At checkout, Commerce shows the Net Terms gateway only to those buyers, and the gateway declines an order that is more than the buyer's available credit. The gateway's payment type in Commerce sets how you bill: on invoices the plugin issues, or by the orders themselves. Money you receive doesn't reopen a buyer's credit until you apply it to their invoice line or order, so you decide which balance a payment clears.
 
 ## Requirements
 

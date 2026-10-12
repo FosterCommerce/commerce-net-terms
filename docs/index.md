@@ -14,7 +14,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 - [Billing by order](./user-guide/order-billing.md), leaving orders unpaid and recording payments against them
 - [Payments](./user-guide/payments.md), recording money received and applying it to invoice lines or orders
 - [Reminders and emails](./user-guide/reminders.md), the invoice email and reminders before and after a due date
-- [Troubleshooting](./user-guide/troubleshooting.md), why the gateway isn't offered or a buyer's credit didn't reopen
+- [Troubleshooting](./user-guide/troubleshooting.md), why the gateway isn't available or a buyer's credit didn't reopen
 
 **Dev guide:**
 

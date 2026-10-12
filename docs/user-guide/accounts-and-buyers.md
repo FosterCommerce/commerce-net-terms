@@ -50,7 +50,7 @@ A user who holds an account, or who has ledger entries or orders charged to an a
 
 ## Buyers
 
-A buyer is a user who can charge orders to the account. The gateway is offered only to buyers. A new account starts with its holder as a buyer. If the holder shouldn't buy, for example when the holder is a company's shared user that nobody signs in as, remove them on the **Buyers** tab.
+A buyer is a user who can charge orders to the account. The gateway is available only to buyers. A new account starts with its holder as a buyer. If the holder shouldn't buy, for example when the holder is a company's shared user that nobody signs in as, remove them on the **Buyers** tab.
 
 An order charges its customer's account when the customer holds one. Otherwise it charges the account the signed-in buyer buys on, when they buy on exactly one account in the store. To charge a company's account for orders its people place in some other way, see [company accounts](../dev-guide/company-accounts.md).
 

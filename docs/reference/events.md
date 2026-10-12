@@ -2,7 +2,7 @@
 
 ## Accounts::EVENT_RESOLVE_HOLDER
 
-**Fires:** when the plugin works out which account an order charges: before offering the gateway, before charging, and when the control panel shows a **Payment terms (Net Terms)** field on an order with no linked account.
+**Fires:** when the plugin works out which account an order charges: before showing the gateway, before charging, and when the control panel shows a **Payment terms (Net Terms)** field on an order with no linked account.
 
 **Payload:** `fostercommerce\netterms\events\ResolveHolderEvent`
 

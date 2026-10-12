@@ -2,7 +2,7 @@
 
 Causes and fixes for problems staff run into with Net Terms.
 
-## Net Terms isn't offered at checkout
+## Net Terms isn't available at checkout
 
 Check each condition on [paying on account](./checkout.md#at-checkout), and these:
 

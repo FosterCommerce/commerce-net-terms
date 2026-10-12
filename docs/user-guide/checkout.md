@@ -7,7 +7,7 @@ What a buyer sees at checkout, what a charge does, and how refunds change what t
 The Net Terms gateway is listed with the store's other payment methods, under the name it has in **Commerce -> Settings -> Gateways**, when all of these are true:
 
 - The order resolves to an account: the customer's own, or the one account the signed-in buyer buys on. A site module can point the order at a different account; see [company accounts](../dev-guide/company-accounts.md).
-- The signed-in user is an active buyer on that account. In the control panel, the gateway is offered only when the signed-in staff user is a buyer on the account.
+- The signed-in user is an active buyer on that account. In the control panel, the gateway is available only when the signed-in staff user is a buyer on the account.
 - The order isn't already complete. A completed order's balance is paid another way.
 - The gateway's own conditions in **Commerce -> Settings -> Gateways** match the order.
 

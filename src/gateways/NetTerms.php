@@ -140,12 +140,12 @@ class NetTerms extends Gateway
 
 	public function availableForUseWithOrder(Order $order): bool
 	{
-		// Never offer Net Terms to pay what a completed order still owes
+		// Keep Net Terms off the gateways that pay what a completed order still owes
 		if (! parent::availableForUseWithOrder($order) || $order->isCompleted) {
 			return false;
 		}
 
-		// Offer it to every active buyer, so the form can say why a charge is refused
+		// Show it to every active buyer, so the form can say why a charge is refused
 		return $this->getBuyerForOrder($order)?->active === true;
 	}
 

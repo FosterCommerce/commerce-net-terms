@@ -77,7 +77,7 @@ In [order billing](../user-guide/order-billing.md) there are no invoices. List t
 
 ### Paying an order's balance
 
-Pay a completed order's balance with Commerce's own `commerce/payments/pay` action, posting the order's `number` and `email`, because it isn't the session cart. Offer the gateways Commerce makes available for the order. The Net Terms gateway is never offered for a completed order. To choose which other gateways are, see [billing by order](../user-guide/order-billing.md#paying-an-orders-balance-online).
+Pay a completed order's balance with Commerce's own `commerce/payments/pay` action, posting the order's `number` and `email`, because it isn't the session cart. List the gateways Commerce makes available for the order. The Net Terms gateway is never available for a completed order. To choose which other gateways are, see [billing by order](../user-guide/order-billing.md#paying-an-orders-balance-online).
 
 ```twig
 {% set order = craft.orders.number(craft.app.request.getQueryParam('number')).one() %}
