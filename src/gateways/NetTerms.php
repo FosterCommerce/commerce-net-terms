@@ -50,7 +50,7 @@ class NetTerms extends Gateway
 	}
 
 	/**
-	 * Refuse a change of payment type while any account is unsettled, because each billing mode counts what an account owes from different records.
+	 * Refuse a change of payment type while any account is unsettled, because each billing mode counts an account’s balance from different records.
 	 */
 	public function validatePaymentType(string $attribute): void
 	{
@@ -140,7 +140,7 @@ class NetTerms extends Gateway
 
 	public function availableForUseWithOrder(Order $order): bool
 	{
-		// Keep Net Terms off the gateways that pay what a completed order still owes
+		// Keep Net Terms off the gateways that pay a completed order’s outstanding balance
 		if (! parent::availableForUseWithOrder($order) || $order->isCompleted) {
 			return false;
 		}
@@ -290,7 +290,7 @@ class NetTerms extends Gateway
 		return $plugin->getLedger()->withAccountLock((int) $buyer->accountId, function () use ($plugin, $buyer, $order, $transaction): NetTermsResponse {
 			$isAuthorization = $transaction->type === TransactionRecord::TYPE_AUTHORIZE;
 
-			// Re-approve a linked order unless the account or buyer is over its limit, since what is owed already includes the order
+			// Re-approve a linked order unless the account or buyer is over its limit, since the balance already includes the order
 			if ($isAuthorization && $plugin->getCreditOrders()->isCreditOrder($order)) {
 				$account = $buyer->getAccount();
 				$isOver = $plugin->getAccounts()->getOverLimit($account) instanceof Money
@@ -314,7 +314,7 @@ class NetTerms extends Gateway
 				return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'gateway.notEnoughCredit'));
 			}
 
-			// Link the order to its account and buyer in order billing, since the Commerce order records what it owes
+			// Link the order to its account and buyer in order billing, since the Commerce order records its balance
 			if ($isAuthorization) {
 				$plugin->getCreditOrders()->linkOrder($order, $freshBuyer);
 			} else {

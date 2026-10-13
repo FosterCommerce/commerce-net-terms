@@ -1,6 +1,6 @@
 # Getting started
 
-Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
+Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks each buyer's balance, and applies recorded payments to invoices or orders.
 
 This walks you from `composer require` to an invoice for an order charged to an account. By the end you know how an account, its buyers, the gateway and an invoice fit together.
 
@@ -49,7 +49,7 @@ Only buyers can charge orders to an account, and the holder already is one. To l
 
 ## 7. Charge an order
 
-Sign in to the storefront as the buyer and check out. Commerce lists the gateway with your other payment methods under the name you gave it. Choose it. The payment form shows the buyer's available credit. Click **Charge to account**. The order is paid in full, and the account's **Owed** figure rises by the order total.
+Sign in to the storefront as the buyer and check out. Commerce lists the gateway with your other payment methods under the name you gave it. Choose it. The payment form shows the buyer's available credit. Click **Charge to account**. The order is paid in full, and the account's **Balance** rises by the order total.
 
 ## 8. Issue an invoice
 

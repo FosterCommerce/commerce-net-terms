@@ -38,7 +38,7 @@ The ledger, in invoice billing. The plugin does not change an entry's amount. Pe
 | `accountId` | int | Foreign key to `netterms_accounts`, cascade. |
 | `buyerId` | int | Foreign key to `netterms_buyers`, set null. Null for an account adjustment. |
 | `type` | string | `charge`, `refund`, `adjustment`, `payment`, `reversal`, or `orderChange`. |
-| `amount` | decimal | Signed. Positive raises what is owed. |
+| `amount` | decimal | Signed. Positive raises the balance. |
 | `orderId` | int | Foreign key to `commerce_orders`, cascade. The charged order, on charge, refund, and orderChange entries. |
 | `transactionHash` | string | The Commerce transaction behind a charge, refund, or orderChange entry. Indexed. |
 | `invoiceLineId` | int | Foreign key to `netterms_invoice_lines`, set null. Issuing an invoice sets it, and voiding the invoice clears it. |
@@ -72,7 +72,7 @@ One buyer's part of an invoice. Its amount is the sum of its entries.
 
 ## netterms_orders
 
-Which account and buyer each order charged, in order billing. What the order owes is on the Commerce order.
+Which account and buyer each order charged, in order billing. Commerce's order total and amount paid give the order's balance.
 
 | Column | Type | Notes |
 |---|---|---|

@@ -61,7 +61,7 @@ class InvoicesController extends Controller
 
 			$accounts = [$account];
 		} else {
-			// Suspended accounts are included, since suspending stops new charges but not what is owed
+			// Suspended accounts are included, since suspending stops new charges but leaves the balance to bill
 			$accounts = $plugin->getAccounts()->getAllAccounts();
 		}
 

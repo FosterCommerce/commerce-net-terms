@@ -12,7 +12,7 @@ use fostercommerce\netterms\enums\EntryType;
 use Money\Money;
 
 /**
- * A ledger entry. A positive amount raises what the account owes.
+ * A ledger entry. A positive amount raises the account’s balance.
  */
 class Entry extends Model
 {

@@ -70,7 +70,7 @@ class Accounts extends Component
 	public const EVENT_RESOLVE_BUYER = 'resolveBuyer';
 
 	/**
-	 * The event that is triggered when deciding whether a user can manage an account on the storefront.
+	 * The event that is triggered when deciding whether a user can see or manage an account on the storefront.
 	 *
 	 * ```php
 	 * use fostercommerce\netterms\events\DefineAccountAccessEvent;
@@ -80,6 +80,8 @@ class Accounts extends Component
 	 * Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, function(DefineAccountAccessEvent $event) {
 	 *     // Let the company’s admins manage its account
 	 *     $event->canManage = MyCompanies::isAdmin($event->user, $event->account->holderId);
+	 *     // Let other company members see it without buying on it
+	 *     $event->canView = MyCompanies::isMember($event->user, $event->account->holderId);
 	 * });
 	 * ```
 	 */
@@ -194,33 +196,33 @@ class Accounts extends Component
 	}
 
 	/**
-	 * What each buyer owes, keyed by buyer ID: from the ledger in invoice billing, from their credit orders’ balances in order billing.
+	 * Each buyer’s balance, keyed by buyer ID: from the ledger in invoice billing, from their credit orders’ balances in order billing.
 	 *
 	 * @return array<int, Money>
 	 */
-	public function getOwedByBuyers(Account $account): array
+	public function getBalanceByBuyers(Account $account): array
 	{
 		$plugin = Plugin::getInstance();
 
 		return $plugin->getBilling() === Billing::Orders
-			? $plugin->getCreditOrders()->getOwedByBuyerId($account)
-			: $plugin->getLedger()->getOwedByBuyers($account);
+			? $plugin->getCreditOrders()->getBalanceByBuyerId($account)
+			: $plugin->getLedger()->getBalanceByBuyers($account);
 	}
 
-	public function getOwedByAccount(Account $account): Money
+	public function getBalanceByAccount(Account $account): Money
 	{
-		return Money::sum(Amounts::zero($account->getCurrency()), ...array_values($this->getOwedByBuyers($account)));
+		return Money::sum(Amounts::zero($account->getCurrency()), ...array_values($this->getBalanceByBuyers($account)));
 	}
 
-	public function getOwedByBuyer(Buyer $buyer): Money
+	public function getBalanceByBuyer(Buyer $buyer): Money
 	{
 		$account = $buyer->getAccount();
 
-		return $this->getOwedByBuyers($account)[(int) $buyer->id] ?? Amounts::zero($account->getCurrency());
+		return $this->getBalanceByBuyers($account)[(int) $buyer->id] ?? Amounts::zero($account->getCurrency());
 	}
 
 	/**
-	 * Accounts that owe money, have unapplied credit, have an unpaid invoice or have credit orders in the trash. An unpaid invoice counts even when the account owes $0, since order billing has no page for it.
+	 * Accounts with a balance, unapplied credit, an unpaid invoice or credit orders in the trash. An unpaid invoice counts even when the account’s balance is $0, since order billing has no page for it.
 	 *
 	 * @return Account[]
 	 */
@@ -230,7 +232,7 @@ class Accounts extends Component
 
 		return array_values(array_filter(
 			$this->getAllAccounts(),
-			fn (Account $account): bool => ! $this->getOwedByAccount($account)->isZero()
+			fn (Account $account): bool => ! $this->getBalanceByAccount($account)->isZero()
 				|| ! $plugin->getPayments()->getUnappliedByAccount($account)->isZero()
 				|| $plugin->getInvoices()->getOpenLinesByAccountId((int) $account->id) !== []
 				|| $this->hasTrashedOrders($account),
@@ -238,7 +240,7 @@ class Accounts extends Component
 	}
 
 	/**
-	 * Whether the account has credit orders in the trash. What it owes leaves them out until they are restored.
+	 * Whether the account has credit orders in the trash. Its balance leaves them out until they are restored.
 	 */
 	public function hasTrashedOrders(Account $account): bool
 	{
@@ -370,24 +372,24 @@ class Accounts extends Component
 	}
 
 	/**
-	 * What the account owes, the credit left before any sublimit applies, and how far it is over its credit limit. Room is null for unlimited credit, and over limit is null when the account isn’t over.
+	 * The account’s balance, the credit left before any sublimit applies, and how far it is over its credit limit. Room is null for unlimited credit, and over limit is null when the account isn’t over.
 	 *
-	 * @return array{owed: Money, room: Money|null, overLimit: Money|null}
+	 * @return array{balance: Money, room: Money|null, overLimit: Money|null}
 	 */
 	public function getAccountFigures(Account $account): array
 	{
-		$owed = $this->getOwedByAccount($account);
-		$overLimit = $account->creditLimit instanceof Money ? $owed->subtract($account->creditLimit) : null;
+		$balance = $this->getBalanceByAccount($account);
+		$overLimit = $account->creditLimit instanceof Money ? $balance->subtract($account->creditLimit) : null;
 
 		return [
-			'owed' => $owed,
-			'room' => $this->calculateAccountRoom($account, $owed),
+			'balance' => $balance,
+			'room' => $this->calculateAccountRoom($account, $balance),
 			'overLimit' => $overLimit instanceof Money && $overLimit->isPositive() ? $overLimit : null,
 		];
 	}
 
 	/**
-	 * How far what the account owes is over its credit limit, or null when it isn’t.
+	 * How far the account’s balance is over its credit limit, or null when it isn’t.
 	 */
 	public function getOverLimit(Account $account): ?Money
 	{
@@ -395,14 +397,14 @@ class Accounts extends Component
 	}
 
 	/**
-	 * How far what each buyer owes is over their sublimit, keyed by buyer ID, for buyers who are over.
+	 * How far each buyer’s balance is over their sublimit, keyed by buyer ID, for buyers who are over.
 	 *
-	 * @param array<int, Money>|null $owedByBuyerId what each buyer owes, when the caller has it
+	 * @param array<int, Money>|null $balanceByBuyerId each buyer’s balance, when the caller has it
 	 * @return array<int, Money>
 	 */
-	public function getOverSublimitByBuyerId(Account $account, ?array $owedByBuyerId = null): array
+	public function getOverSublimitByBuyerId(Account $account, ?array $balanceByBuyerId = null): array
 	{
-		$owedByBuyerId ??= $this->getOwedByBuyers($account);
+		$balanceByBuyerId ??= $this->getBalanceByBuyers($account);
 		$overByBuyerId = [];
 		$zero = Amounts::zero($account->getCurrency());
 
@@ -411,7 +413,7 @@ class Accounts extends Component
 				continue;
 			}
 
-			$over = ($owedByBuyerId[(int) $buyer->id] ?? $zero)->subtract($buyer->sublimit);
+			$over = ($balanceByBuyerId[(int) $buyer->id] ?? $zero)->subtract($buyer->sublimit);
 			if ($over->isPositive()) {
 				$overByBuyerId[(int) $buyer->id] = $over;
 			}
@@ -443,27 +445,27 @@ class Accounts extends Component
 	/**
 	 * The most each of an account's buyers can charge right now, keyed by buyer ID. Null when it is unlimited.
 	 *
-	 * @param array<int, Money>|null $owedByBuyerId what each buyer owes, when the caller has it
+	 * @param array<int, Money>|null $balanceByBuyerId each buyer’s balance, when the caller has it
 	 * @return array<int, Money|null>
 	 */
-	public function getAvailableCreditByBuyerId(Account $account, ?array $owedByBuyerId = null): array
+	public function getAvailableCreditByBuyerId(Account $account, ?array $balanceByBuyerId = null): array
 	{
 		$zero = Amounts::zero($account->getCurrency());
 		$buyers = $this->getBuyersByAccountId((int) $account->id);
-		$owedByBuyerId ??= $this->getOwedByBuyers($account);
-		$accountOwed = Money::sum($zero, ...array_values($owedByBuyerId));
-		$accountRoom = $this->calculateAccountRoom($account, $accountOwed);
+		$balanceByBuyerId ??= $this->getBalanceByBuyers($account);
+		$accountBalance = Money::sum($zero, ...array_values($balanceByBuyerId));
+		$accountRoom = $this->calculateAccountRoom($account, $accountBalance);
 		$unreservedRoom = $account->creditLimit instanceof Money
-			? Money::max($zero, $this->calculateUnreservedRoom($buyers, $owedByBuyerId, $account->creditLimit, $accountOwed))
+			? Money::max($zero, $this->calculateUnreservedRoom($buyers, $balanceByBuyerId, $account->creditLimit, $accountBalance))
 			: null;
 		$isCeiling = $account->getEffectiveSublimitMode() === SublimitMode::Ceiling;
 
 		$availableByBuyerId = [];
 		foreach ($buyers as $buyer) {
-			$buyerOwed = $owedByBuyerId[(int) $buyer->id] ?? $zero;
+			$buyerBalance = $balanceByBuyerId[(int) $buyer->id] ?? $zero;
 			$availableByBuyerId[(int) $buyer->id] = match (true) {
 				! $buyer->active => $zero,
-				$buyer->sublimit instanceof Money => $this->minOf($accountRoom, Money::max($zero, $buyer->sublimit->subtract($buyerOwed))),
+				$buyer->sublimit instanceof Money => $this->minOf($accountRoom, Money::max($zero, $buyer->sublimit->subtract($buyerBalance))),
 				$isCeiling => $accountRoom,
 				default => $this->minOf($accountRoom, $unreservedRoom),
 			};
@@ -526,7 +528,7 @@ class Accounts extends Component
 	}
 
 	/**
-	 * Save a buyer, enforcing that a sublimit covers what they owe and fits the account’s mode.
+	 * Save a buyer, enforcing that a sublimit covers their balance and fits the account’s mode.
 	 *
 	 * @throws LedgerException if the account is locked by another request
 	 */
@@ -551,14 +553,14 @@ class Accounts extends Component
 				return false;
 			}
 
-			// Refuse only a lowered sublimit below what is owed, so a buyer already over can still be saved or reactivated
+			// Refuse only a lowered sublimit below the buyer’s balance, so a buyer already over can still be saved or reactivated
 			$savedSublimit = $buyer->id !== null ? $this->getBuyerById($buyer->id)?->sublimit : null;
 			$isLowered = $buyer->sublimit instanceof Money && (! $savedSublimit instanceof Money || $buyer->sublimit->lessThan($savedSublimit));
 			if ($buyer->id !== null && $buyer->sublimit instanceof Money && $isLowered) {
-				$owed = $this->getOwedByBuyer($buyer);
-				if ($buyer->sublimit->lessThan($owed)) {
-					$buyer->addError('sublimit', Craft::t(Plugin::HANDLE, 'buyer.sublimitBelowOwed', [
-						'owed' => Amounts::toString($owed),
+				$balance = $this->getBalanceByBuyer($buyer);
+				if ($buyer->sublimit->lessThan($balance)) {
+					$buyer->addError('sublimit', Craft::t(Plugin::HANDLE, 'buyer.sublimitBelowBalance', [
+						'balance' => Amounts::toString($balance),
 					]));
 
 					return false;
@@ -648,24 +650,17 @@ class Accounts extends Component
 
 	public function canManage(Account $account, User $user): bool
 	{
-		$event = new DefineAccountAccessEvent([
-			'account' => $account,
-			'user' => $user,
-			'canManage' => $account->holderId === $user->id,
-		]);
-		$this->trigger(self::EVENT_DEFINE_ACCOUNT_ACCESS, $event);
-
-		return $event->canManage;
+		return $this->defineAccess($account, $user)->canManage;
 	}
 
 	/**
-	 * Whether the user can see the account on the storefront: its holder, an active buyer on it, or someone who manages it.
+	 * Whether the user can see the account on the storefront.
 	 */
 	public function canView(Account $account, User $user): bool
 	{
-		return $account->holderId === $user->id
-			|| $this->getBuyer($account, (int) $user->id)?->active === true
-			|| $this->canManage($account, $user);
+		$event = $this->defineAccess($account, $user);
+
+		return $event->canView || $event->canManage;
 	}
 
 	/**
@@ -711,6 +706,20 @@ class Accounts extends Component
 		$account->unlimited = $record->creditLimit === null;
 
 		return $account;
+	}
+
+	private function defineAccess(Account $account, User $user): DefineAccountAccessEvent
+	{
+		$isHolder = $account->holderId === $user->id;
+		$event = new DefineAccountAccessEvent([
+			'account' => $account,
+			'user' => $user,
+			'canManage' => $isHolder,
+			'canView' => $isHolder || $this->getBuyer($account, (int) $user->id)?->active === true,
+		]);
+		$this->trigger(self::EVENT_DEFINE_ACCOUNT_ACCESS, $event);
+
+		return $event;
 	}
 
 	private function createBuyerFromRecord(BuyerRecord $record): Buyer
@@ -776,7 +785,7 @@ class Accounts extends Component
 	/**
 	 * Credit left on the account. Null when the account has unlimited credit.
 	 */
-	private function calculateAccountRoom(Account $account, Money $accountOwed): ?Money
+	private function calculateAccountRoom(Account $account, Money $accountBalance): ?Money
 	{
 		$zero = Amounts::zero($account->getCurrency());
 
@@ -784,7 +793,7 @@ class Accounts extends Component
 			return $zero;
 		}
 
-		return $account->creditLimit instanceof Money ? Money::max($zero, $account->creditLimit->subtract($accountOwed)) : null;
+		return $account->creditLimit instanceof Money ? Money::max($zero, $account->creditLimit->subtract($accountBalance)) : null;
 	}
 
 	/**
@@ -803,14 +812,14 @@ class Accounts extends Component
 	 * Credit left for buyers without a sublimit once every reserved amount is set aside.
 	 *
 	 * @param Buyer[] $buyers
-	 * @param array<int, Money> $owedByBuyerId
+	 * @param array<int, Money> $balanceByBuyerId
 	 */
-	private function calculateUnreservedRoom(array $buyers, array $owedByBuyerId, Money $creditLimit, Money $accountOwed): Money
+	private function calculateUnreservedRoom(array $buyers, array $balanceByBuyerId, Money $creditLimit, Money $accountBalance): Money
 	{
 		$zero = Amounts::zero($creditLimit->getCurrency());
-		$room = $creditLimit->subtract($accountOwed);
+		$room = $creditLimit->subtract($accountBalance);
 
-		// Set aside each reserving buyer's unspent sublimit. What they owe is already in the account total.
+		// Set aside each reserving buyer's unspent sublimit. Their balances are already in the account total.
 		foreach ($buyers as $buyer) {
 			if (! $buyer->active) {
 				continue;
@@ -820,8 +829,8 @@ class Accounts extends Component
 				continue;
 			}
 
-			$owed = $owedByBuyerId[(int) $buyer->id] ?? $zero;
-			$room = $room->subtract(Money::max($zero, $buyer->sublimit->subtract($owed)));
+			$buyerBalance = $balanceByBuyerId[(int) $buyer->id] ?? $zero;
+			$room = $room->subtract(Money::max($zero, $buyer->sublimit->subtract($buyerBalance)));
 		}
 
 		return $room;

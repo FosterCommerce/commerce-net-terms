@@ -26,7 +26,7 @@ use Money\Money;
 class NetTermsVariable
 {
 	/**
-	 * The account the current user holds or buys on, in the current store.
+	 * The account the current user holds or buys on, in the current store, when they can see it.
 	 */
 	public function getAccount(): ?Account
 	{
@@ -39,12 +39,12 @@ class NetTermsVariable
 		$storeId = $this->getCurrentStoreId();
 		$heldAccount = $accounts->getAccountByHolder($storeId, (int) $currentUser->id);
 
-		if ($heldAccount instanceof Account) {
+		if ($heldAccount instanceof Account && $this->canView($heldAccount)) {
 			return $heldAccount;
 		}
 
 		foreach ($accounts->getAccountsByBuyerUserId((int) $currentUser->id) as $account) {
-			if ($account->storeId === $storeId) {
+			if ($account->storeId === $storeId && $this->canView($account)) {
 				return $account;
 			}
 		}
@@ -85,16 +85,16 @@ class NetTermsVariable
 		return $this->canView($buyer->getAccount()) ? Plugin::getInstance()->getAccounts()->getAvailableCredit($buyer) : null;
 	}
 
-	public function getOwed(Account $account): ?Money
+	public function getBalance(Account $account): ?Money
 	{
-		return $this->canView($account) ? Plugin::getInstance()->getAccounts()->getOwedByAccount($account) : null;
+		return $this->canView($account) ? Plugin::getInstance()->getAccounts()->getBalanceByAccount($account) : null;
 	}
 
-	public function getOwedByBuyer(Buyer $buyer): ?Money
+	public function getBalanceByBuyer(Buyer $buyer): ?Money
 	{
 		$account = $buyer->getAccount();
 
-		return $this->canView($account) ? Plugin::getInstance()->getAccounts()->getOwedByBuyer($buyer) : null;
+		return $this->canView($account) ? Plugin::getInstance()->getAccounts()->getBalanceByBuyer($buyer) : null;
 	}
 
 	public function getUnappliedCredit(Account $account): ?Money
@@ -223,7 +223,7 @@ class NetTermsVariable
 	}
 
 	/**
-	 * The holder, an active buyer, or anyone who can manage the account can see it.
+	 * The holder, an active buyer, or anyone who can manage the account can see it, unless an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler changes who can.
 	 */
 	private function canView(Account $account): bool
 	{

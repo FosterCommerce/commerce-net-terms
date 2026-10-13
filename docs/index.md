@@ -1,6 +1,6 @@
 # Net Terms documentation
 
-Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
+Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks each buyer's balance, and applies recorded payments to invoices or orders.
 
 ## Where to go
 
@@ -10,7 +10,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 
 - [Accounts and buyers](./user-guide/accounts-and-buyers.md), credit limits, sublimits, and available credit
 - [Paying on account](./user-guide/checkout.md), what buyers see at checkout and how refunds work
-- [Invoices](./user-guide/invoices.md), billing what accounts owe
+- [Invoices](./user-guide/invoices.md), billing account balances
 - [Billing by order](./user-guide/order-billing.md), leaving orders unpaid and recording payments against them
 - [Payments](./user-guide/payments.md), recording money received and applying it to invoice lines or orders
 - [Reminders and emails](./user-guide/reminders.md), the invoice email and reminders before and after a due date

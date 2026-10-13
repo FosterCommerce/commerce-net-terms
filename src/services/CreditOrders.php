@@ -40,7 +40,7 @@ use yii\base\Component;
 use yii\base\InvalidConfigException;
 
 /**
- * Orders charged to an account: payments applied to them in order billing, and changes to their totals in invoice billing. In order billing the order and its transactions are the record of what is owed and paid.
+ * Orders charged to an account: payments applied to them in order billing, and changes to their totals in invoice billing. In order billing the order and its transactions record the balance and payments.
  */
 class CreditOrders extends Component
 {
@@ -133,16 +133,16 @@ class CreditOrders extends Component
 	}
 
 	/**
-	 * What each buyer’s credit orders still owe, from Commerce’s stored order totals, keyed by buyer ID.
+	 * The unpaid balance of each buyer’s credit orders, from Commerce’s stored order totals, keyed by buyer ID.
 	 *
 	 * @return array<int, Money>
 	 */
-	public function getOwedByBuyerId(Account $account): array
+	public function getBalanceByBuyerId(Account $account): array
 	{
 		$sumsByBuyerId = (new Query())
 			->select([
 				'creditOrders.buyerId',
-				// Count only what is unpaid, since an overpaid order owes the buyer and doesn't settle their other orders
+				// Count only what is unpaid, since an overpaid order's negative balance doesn't settle the buyer's other orders
 				'SUM(CASE WHEN [[orders.totalPrice]] > [[orders.totalPaid]] THEN [[orders.totalPrice]] - [[orders.totalPaid]] ELSE 0 END)',
 			])
 			->from([
@@ -387,7 +387,7 @@ class CreditOrders extends Component
 			$change = Amounts::toMoney($changeDecimal, $currency);
 			$outstanding = Amounts::toMoney((string) $order->getOutstandingBalance(), $currency);
 
-			// Charge only what the order still owes, since a payment taken after the edit covers the rest
+			// Charge only the order’s outstanding balance, since a payment taken after the edit covers the rest
 			if ($change->isPositive()) {
 				$this->chargeRaise($order, $charge, Money::min($change, $outstanding), $editKey, $authorId);
 			} else {

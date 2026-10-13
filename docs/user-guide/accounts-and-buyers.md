@@ -4,7 +4,7 @@ How an account is set up, who can charge to it, and how much each buyer can spen
 
 ## Accounts
 
-An account is one customer's terms and credit limit in one store. The control panel opens new accounts in the primary store. Creating, editing and deleting accounts, buyers and adjustments needs the **Manage accounts, buyers and adjustments** permission. Go to **Net Terms -> Accounts** to see every account with its limit, what it owes, the credit it has left and any payments not yet applied.
+An account is one customer's terms and credit limit in one store. The control panel opens new accounts in the primary store. Creating, editing and deleting accounts, buyers and adjustments needs the **Manage accounts, buyers and adjustments** permission. Go to **Net Terms -> Accounts** to see every account with its limit, its balance, the credit it has left and any payments not yet applied.
 
 An account's page has tabs for **Account**, with the settings below, then **Buyers**, **Invoices** (**Orders** in [order billing](./order-billing.md)), **Payments**, and **Ledger** in invoice billing only. Invoices, orders and payments show 50 to a page, and the ledger 100, newest first.
 
@@ -12,14 +12,14 @@ An account's page has tabs for **Account**, with the settings below, then **Buye
 |---|---|
 | Account holder | The customer the account belongs to, who receives its invoices. Set once, when the account is created. Net Terms adds the holder as the account's first buyer, with no sublimit. |
 | Unlimited credit | Removes the credit limit. Buyers' sublimits still apply, and **Available** shows **Unlimited** for a buyer without one. |
-| Credit limit | The most the account can owe at once. |
+| Credit limit | The highest balance the account can have. |
 | Protect sublimits | Whether each buyer's sublimit is protected for only them to spend. Defaults to the plugin setting. |
 | Payment terms | Days from an invoice's issue date, or an order's date in order billing, to its due date. Blank uses the plugin's **Default payment terms**, 30 days. See [payment terms](#payment-terms). |
-| Status | **Active**, or **Suspended** to stop buyers checking out on the account. A suspended account still owes what it has charged. |
+| Status | **Active**, or **Suspended** to stop buyers checking out on the account. Suspending an account doesn't change its balance. |
 
 ### Over the limit
 
-An account or buyer can owe more than its limit. Net Terms checks available credit only at checkout, and on an order edit in invoice billing when the buyer and account are active. These can each take an account over its limit:
+An account or buyer can have a balance over its limit. Net Terms checks available credit only at checkout, and on an order edit in invoice billing when the buyer and account are active. These can each take an account over its limit:
 
 - lowering the credit limit
 - a positive adjustment
@@ -28,9 +28,9 @@ An account or buyer can owe more than its limit. Net Terms checks available cred
 - an order edit in order billing
 - a raise on a suspended account or for a deactivated buyer
 
-**Available** then shows $0. The account page and the accounts list show "Over the credit limit by $2.00" in red, and the **Buyers** tab shows "Over the sublimit by $4.00" beside the buyer. Applying payments to what they owe brings them back under.
+**Available** then shows $0. The account page and the accounts list show "Over the credit limit by $2.00" in red, and the **Buyers** tab shows "Over the sublimit by $4.00" beside the buyer. Applying payments to their invoice lines or orders brings them back under the limit.
 
-A buyer who is over their sublimit can still be saved or reactivated. Only a new or lowered sublimit can't be below what they owe.
+A buyer who is over their sublimit can still be saved or reactivated. Only a new or lowered sublimit can't be below their balance.
 
 ### Payment terms
 
@@ -58,21 +58,21 @@ On the account's **Buyers** tab, choose a user, optionally enter a sublimit, and
 
 To remove a buyer, click **Remove**. A buyer with ledger entries or orders is deactivated instead, so their history stays on the account. A deactivated buyer has no available credit. **Reactivate** restores them, and so does adding the same user again.
 
-A buyer's **Owed** figure in invoice billing is what they have charged, less refunds, plus or minus adjustments and order changes, less the payments applied to their invoice lines. In order billing it is what their orders on the account still owe. **Available** is what they can charge.
+A buyer's **Balance** in invoice billing is what they have charged, less refunds, plus or minus adjustments and order changes, less the payments applied to their invoice lines. In order billing it is the sum of the unpaid balances of their orders on the account. **Available** is what they can charge.
 
 ## Sublimits
 
-A sublimit caps what one buyer can owe at once. Leave it blank for no sublimit. A new or lowered sublimit can't be below what the buyer already owes.
+A sublimit caps one buyer's balance. Leave it blank for no sublimit. A new or lowered sublimit can't be below the buyer's current balance.
 
 The account's **Protect sublimits** setting decides whether a buyer's sublimit is also protected for only them to spend.
 
 ### Sublimits not protected
 
-A sublimit is the most one buyer can owe, and every buyer spends from the same credit limit. With a $10,000 limit and a $2,000 sublimit for one buyer, another buyer can spend $9,000 first and leave that buyer only $1,000. Sublimits can add up to more than the limit.
+A sublimit is the highest balance one buyer can have, and every buyer spends from the same credit limit. With a $10,000 limit and a $2,000 sublimit for one buyer, another buyer can spend $9,000 first and leave that buyer only $1,000. Sublimits can add up to more than the limit.
 
 ### Sublimits protected
 
-A sublimit is still the most one buyer can owe, and that amount is also protected for only them to spend. With a $10,000 limit and a $2,000 sublimit for one buyer, the other buyers share $8,000, and the $2,000 is there for that buyer however much the others spend. Protected sublimits can't add up to more than the credit limit, unless the account has unlimited credit.
+A sublimit is still the highest balance one buyer can have, and that amount is also protected for only them to spend. With a $10,000 limit and a $2,000 sublimit for one buyer, the other buyers share $8,000, and the $2,000 is there for that buyer however much the others spend. Protected sublimits can't add up to more than the credit limit, unless the account has unlimited credit.
 
 The plugin settings don't accept **Protect sublimits** turned on as the default while an account that uses the default has sublimits adding up to more than its limit, and name those accounts.
 
@@ -82,4 +82,4 @@ A buyer's credit reopens when you apply a payment to their invoice line, or in o
 
 ## Adjustments
 
-An adjustment changes what the account or one buyer owes without an order: a fee, a correction, or an opening balance. On the account's **Ledger** tab, click **Add adjustment**. Enter an amount, choose the buyer or **Account**, enter a reason, and click **Add adjustment**. A positive amount adds to what is owed, and a negative one takes it off. Adjustments go on the next invoice. Order billing has no adjustments, since what an account owes there is its orders' balances; edit the order instead.
+An adjustment changes the balance of the account or one buyer without an order: a fee, a correction, or an opening balance. On the account's **Ledger** tab, click **Add adjustment**. Enter an amount, choose the buyer or **Account**, enter a reason, and click **Add adjustment**. A positive amount raises the balance, and a negative one lowers it. Adjustments go on the next invoice. Order billing has no adjustments, since an account's balance there is the sum of its orders' balances; edit the order instead.

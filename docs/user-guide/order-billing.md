@@ -4,13 +4,13 @@ How Net Terms works when the orders themselves are the bills: an order stays unp
 
 ## Choosing order billing
 
-Go to **Commerce -> Settings -> Gateways**, or click **Edit gateway** beside **Billing** in **Net Terms -> Settings**. Open the Net Terms gateway, set **Credit Card Payment Type** to **Authorize only**, and click **Save**. **Purchase** is invoice billing. The payment type changes only while every account is settled. An account is settled when it owes $0, has no unapplied payments, and has no unpaid invoice or order in the trash. The error lists each account that isn't. Paid and voided invoices from before a switch stay on their payments' pages.
+Go to **Commerce -> Settings -> Gateways**, or click **Edit gateway** beside **Billing** in **Net Terms -> Settings**. Open the Net Terms gateway, set **Credit Card Payment Type** to **Authorize only**, and click **Save**. **Purchase** is invoice billing. The payment type changes only while every account is settled. An account is settled when its balance is $0 and it has no unapplied payments, no unpaid invoice and no order in the trash. The error lists each account that isn't. Paid and voided invoices from before a switch stay on their payments' pages.
 
 | | Invoice billing | Order billing |
 |---|---|---|
 | An order charged to an account | Is paid at checkout | Stays unpaid, with the charge authorized |
 | What the account is billed with | Invoices the plugin issues, one line per buyer | The orders, each with its own balance |
-| The record of what is owed and paid | The account's **Ledger** tab | Each order's **Transactions** tab in Commerce |
+| The record of charges and payments | The account's **Ledger** tab | Each order's **Transactions** tab in Commerce |
 | A payment is applied to | Invoice lines | Unpaid and partially paid orders |
 | Adjustments | Yes | No. Edit the order instead. |
 
@@ -18,7 +18,7 @@ Go to **Commerce -> Settings -> Gateways**, or click **Edit gateway** beside **B
 
 The Net Terms gateway authorizes the order total instead of purchasing it. The order completes, and Commerce shows it as **Unpaid**. Name the gateway for what buyers recognize, such as "Pay via check/ACH". The gateway checks credit limits and sublimits as in invoice billing.
 
-Net Terms records which account and buyer the order charged, and does not write ledger entries. What an order owes is its total less what Commerce shows as paid. What a buyer owes is the sum of the unpaid balances of their orders on the account, not counting trashed orders. An overpaid order doesn't reduce what the buyer owes on other orders.
+Net Terms records which account and buyer the order charged, and does not write ledger entries. An order's balance is its total less what Commerce shows as paid. A buyer's balance is the sum of the unpaid balances of their orders on the account, not counting trashed orders. An overpaid order doesn't lower the balances of the buyer's other orders.
 
 Each order is due its [payment terms](./accounts-and-buyers.md#payment-terms) after the order date. The account's **Orders** tab lists every order charged to the account, with its balance, due date and whether it is overdue.
 
@@ -54,7 +54,7 @@ Commerce's **Send Email** menu on an order's page resends any of its emails, suc
 
 Online payments, refunds and order edits happen in Commerce.
 
-- **The order is edited.** What the buyer owes follows the order's new total. Net Terms doesn't check the edit against available credit, so a raise can take the account [over its limit](./accounts-and-buyers.md#over-the-limit).
+- **The order is edited.** The buyer's balance follows the order's new total. Net Terms doesn't check the edit against available credit, so a raise can take the account [over its limit](./accounts-and-buyers.md#over-the-limit).
 - **A recorded payment is refunded in Commerce.** Refund the capture on the order's **Transactions** tab. The amount goes back onto the order's balance and is added to the payment's **Refunded** figure.
 - **A payment was applied to the wrong order.** Click **Reverse** beside it on the payment's page. Net Terms adds a refund transaction to the order, and the amount goes back to the payment, unapplied. If the order is in the trash, restore it before you reverse the payment.
-- **The order is deleted.** A trashed order stops counting toward what the buyer owes, and the account's **Orders** tab doesn't list it. Restoring the order counts it again. Deleting the order permanently deletes the record of payments applied to it, and those amounts go back to their payments, unapplied.
+- **The order is deleted.** A trashed order stops counting toward the buyer's balance, and the account's **Orders** tab doesn't list it. Restoring the order counts it again. Deleting the order permanently deletes the record of payments applied to it, and those amounts go back to their payments, unapplied.

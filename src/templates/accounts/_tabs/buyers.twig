@@ -6,7 +6,7 @@
 			<tr>
 				<th>{{ 'buyer.user'|t('net-terms') }}</th>
 				<th>{{ 'buyer.sublimit'|t('net-terms') }}</th>
-				<th class="nt-amount">{{ 'buyer.owes'|t('net-terms') }}</th>
+				<th class="nt-amount">{{ 'buyer.balance'|t('net-terms') }}</th>
 				<th class="nt-amount">{{ 'buyer.available'|t('net-terms') }}</th>
 				{% if canManage %}<th></th>{% endif %}
 			</tr>
@@ -33,7 +33,7 @@
 							{{ buyer.sublimit ? buyer.sublimit|money : 'buyer.noSublimit'|t('net-terms') }}
 						{% endif %}
 					</td>
-					<td class="nt-amount">{{ (owedByBuyerId[buyer.id] ?? zero)|money }}</td>
+					<td class="nt-amount">{{ (balanceByBuyerId[buyer.id] ?? zero)|money }}</td>
 					{% set available = availableByBuyerId[buyer.id] %}
 					<td class="nt-amount">
 						{{ available ? available|money : 'account.unlimitedShort'|t('net-terms') }}

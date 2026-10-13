@@ -180,16 +180,16 @@ class Ledger extends Component
 	}
 
 	/**
-	 * What each buyer on an account owes, keyed by buyer ID. Entries without a buyer are keyed by 0.
+	 * Each buyer’s balance on an account, keyed by buyer ID. Entries without a buyer are keyed by 0.
 	 *
 	 * @return array<int, Money>
 	 */
-	public function getOwedByBuyers(Account $account): array
+	public function getBalanceByBuyers(Account $account): array
 	{
 		$rows = (new Query())
 			->select([
 				'buyerId',
-				'owed' => 'SUM([[amount]])',
+				'balance' => 'SUM([[amount]])',
 			])
 			->from(Table::ENTRIES)
 			->where([
@@ -199,14 +199,14 @@ class Ledger extends Component
 			->groupBy(['buyerId'])
 			->all();
 
-		/** @var array<int, array{buyerId: int|string|null, owed: string|null}> $rows */
+		/** @var array<int, array{buyerId: int|string|null, balance: string|null}> $rows */
 		$currency = $account->getCurrency();
-		$owedByBuyerId = [];
+		$balanceByBuyerId = [];
 		foreach ($rows as $row) {
-			$owedByBuyerId[(int) $row['buyerId']] = Amounts::fromSum($row['owed'], $currency);
+			$balanceByBuyerId[(int) $row['buyerId']] = Amounts::fromSum($row['balance'], $currency);
 		}
 
-		return $owedByBuyerId;
+		return $balanceByBuyerId;
 	}
 
 	/**
@@ -343,7 +343,7 @@ class Ledger extends Component
 	}
 
 	/**
-	 * Follow a change to a charged order’s total, so what is owed matches the order. A lowered total comes off the charge’s invoice line when that line’s balance covers it.
+	 * Follow a change to a charged order’s total, so the balance matches the order. A lowered total comes off the charge’s invoice line when that line’s balance covers it.
 	 *
 	 * @param int|null $authorId the staff member who edited the order, since the queue job that calls this runs with no signed-in user
 	 * @throws LedgerException if the account is locked by another request

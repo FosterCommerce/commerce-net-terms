@@ -89,7 +89,7 @@ class Install extends Migration
 			'uid' => $this->uid(),
 		]);
 
-		// Order billing: which account and buyer each order charged. The Commerce order records what it owes.
+		// Order billing: which account and buyer each order charged. The Commerce order records its balance.
 		$this->createTable(Table::ORDERS, [
 			'id' => $this->primaryKey(),
 			'orderId' => $this->integer()->notNull(),
@@ -168,7 +168,7 @@ class Install extends Migration
 			'accountId' => $this->integer()->notNull(),
 			'buyerId' => $this->integer(),
 			'type' => $this->string(20)->notNull(),
-			// Positive raises what the account owes
+			// Positive raises the account’s balance
 			'amount' => $this->decimal(14, 4)->notNull(),
 			'orderId' => $this->integer(),
 			'transactionHash' => $this->string(32),
@@ -234,7 +234,7 @@ class Install extends Migration
 		$this->addForeignKey(null, Table::APPLICATIONS, ['authorId'], CraftTable::USERS, ['id'], 'SET NULL');
 
 		$this->addForeignKey(null, Table::ENTRIES, ['accountId'], Table::ACCOUNTS, ['id'], 'CASCADE');
-		// Keep ledger rows when their buyer is deleted, since they record money owed or paid
+		// Keep ledger rows when their buyer is deleted, since the account’s balance is their sum
 		$this->addForeignKey(null, Table::ENTRIES, ['buyerId'], Table::BUYERS, ['id'], 'SET NULL');
 		$this->addForeignKey(null, Table::ENTRIES, ['orderId'], CommerceTable::ORDERS, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::ENTRIES, ['invoiceLineId'], Table::INVOICE_LINES, ['id'], 'SET NULL');

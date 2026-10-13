@@ -39,7 +39,7 @@ use yii\base\Component;
 use yii\db\Expression;
 
 /**
- * Saves drafts, issues, voids and sends invoices, and works out what is owed on them.
+ * Saves drafts, issues, voids and sends invoices, and works out their balances.
  */
 class Invoices extends Component
 {
@@ -321,7 +321,7 @@ class Invoices extends Component
 	}
 
 	/**
-	 * What issuing an invoice now would bill each buyer who owes a positive amount. Buyer ID 0 is the account itself.
+	 * What issuing an invoice now would bill each buyer with a positive balance. Buyer ID 0 is the account itself.
 	 *
 	 * @return array<int, Money>
 	 */
@@ -402,7 +402,7 @@ class Invoices extends Component
 	}
 
 	/**
-	 * Bill every uninvoiced entry made up to the cutoff, one line per buyer. Returns null when no buyer owes a positive amount.
+	 * Bill every uninvoiced entry made up to the cutoff, one line per buyer. Returns null when no buyer has a positive balance.
 	 *
 	 * Pass a draft, or a new invoice, to issue it with its due date and notes. Otherwise the due date follows the account's payment terms.
 	 *

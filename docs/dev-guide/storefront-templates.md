@@ -1,15 +1,15 @@
 # Storefront templates
 
-Show a customer their account and what it owes, let the people who manage it set sublimits, and in order billing take payment of an order's balance. The plugin does not ship storefront pages. You build them with `craft.netTerms` and the plugin's storefront actions.
+Show a customer their account and its balance, let the people who manage it set sublimits, and in order billing take payment of an order's balance. The plugin does not ship storefront pages. You build them with `craft.netTerms` and the plugin's storefront actions.
 
-`craft.netTerms` returns only accounts the signed-in user can see: the holder's, one they are an active buyer on, or one they can manage. Who can manage an account is the holder by default; see [company accounts](./company-accounts.md) to change that.
+`craft.netTerms` returns only accounts the signed-in user can see: the holder's, one they are an active buyer on, one they can manage, or one an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler lets them see. To change who can see or manage an account, see [company accounts](./company-accounts.md).
 
-`getAccount()` returns only the account the user holds or buys on. For someone who manages an account without buying on it, fetch the account with `getAccountByHolderId(holderId)`.
+`getAccount()` returns only the account the user holds or buys on. For a user who can see or manage an account without buying on it, fetch the account with `getAccountByHolderId(holderId)`.
 
 ## Example
 
 1. Fetch the signed-in user's account.
-2. Show what it owes and what the user can still charge.
+2. Show its balance and what the user can still charge.
 3. List its invoices with a link to each.
 
 ```twig
@@ -18,7 +18,7 @@ Show a customer their account and what it owes, let the people who manage it set
 {% if account %}
 	{% set buyer = craft.netTerms.getCurrentBuyer(account) %}
 
-	<p>Owed: {{ craft.netTerms.getOwed(account)|money }}</p>
+	<p>Balance: {{ craft.netTerms.getBalance(account)|money }}</p>
 	{% if buyer and buyer.active %}
 		{% set available = craft.netTerms.getAvailableCredit(buyer) %}
 		<p>Available to you: {{ available ? available|money : 'Unlimited' }}</p>
@@ -61,7 +61,7 @@ To set a buyer's sublimit, post to `net-terms/storefront/save-buyer`. To add a u
 
 To remove a buyer, post `accountId` and `buyerId` to `net-terms/storefront/remove-buyer`. The action deactivates a buyer with ledger entries or orders instead of removing them. Adding that user again reactivates them.
 
-Both actions return a 403 for a user who can't manage the account. When a sublimit doesn't save, the action flashes the reason, such as a sublimit below what the buyer owes.
+Both actions return a 403 for a user who can't manage the account. When a sublimit doesn't save, the action flashes the reason, such as a sublimit below the buyer's balance.
 
 ## Order billing
 
@@ -101,7 +101,7 @@ Pay a completed order's balance with Commerce's own `commerce/payments/pay` acti
 {% endif %}
 ```
 
-This form charges the order's whole balance. The payment is a Commerce transaction on the order, and the order's balance and what the buyer owes go down by its amount. Net Terms does not record it as a payment.
+This form charges the order's whole balance. The payment is a Commerce transaction on the order, and the payment lowers the order's balance and the buyer's balance by the amount paid. Net Terms does not record it as a payment.
 
 To link order reminders to this page, link to it from the reminder's Commerce email template; see [order billing emails](../user-guide/reminders.md#order-billing-emails).
 
@@ -114,8 +114,8 @@ To link order reminders to this page, link to it from the reminder's Commerce em
 | `getCurrentBuyer(account)` | The user's buyer record on the account. |
 | `getBuyers(account)` | Every buyer on the account, including deactivated ones. Check `buyer.active`. |
 | `getAvailableCredit(buyer)` | What the buyer can still charge, or `null` when it is unlimited. |
-| `getOwed(account)` | What the account owes. |
-| `getOwedByBuyer(buyer)` | What the buyer owes. |
+| `getBalance(account)` | The account's balance. |
+| `getBalanceByBuyer(buyer)` | The buyer's balance. |
 | `getUnappliedCredit(account)` | Money received and not yet applied. |
 | `canManage(account)` | Whether the user can manage buyers and sublimits. |
 | `getInvoices(account)` | The account's issued invoices, newest first. Drafts are left out. |

@@ -8,7 +8,7 @@ By default an order charges the account its customer holds, or else the one acco
 |---|---|---|
 | `Accounts::EVENT_RESOLVE_HOLDER` | Which user's account an order charges | The customer, or the holder of the one account the signed-in buyer buys on |
 | `Accounts::EVENT_RESOLVE_BUYER` | Which user is charging the order | The signed-in user |
-| `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` | Whether a user can manage buyers and sublimits on the storefront | The holder only |
+| `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` | Whether a user can see the account, and manage its buyers and sublimits, through `craft.netTerms` and the storefront actions | Manage: the holder. View: the holder and active buyers |
 | `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` | Whether `net-terms/storefront/save-buyer` can add a user as a buyer | No one |
 | `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY` | Whether a user can hold a new account | Any user |
 

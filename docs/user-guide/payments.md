@@ -8,7 +8,7 @@ Recording, applying and reversing payments needs the **Manage invoices and payme
 
 Go to **Net Terms -> Payments -> Record payment**, or click **Record payment** on an account's **Payments** tab or an invoice.
 
-1. Choose the **Account**. The form lists what the account still owes on: invoice lines with a balance, oldest due first, or in [order billing](./order-billing.md) its unpaid and partially paid orders, oldest first.
+1. Choose the **Account**. The form lists the account's open items: invoice lines with a balance, oldest due first, or in [order billing](./order-billing.md) its unpaid and partially paid orders, oldest first.
 2. Enter the **Amount**, **Method** (card, check, ACH, wire or other) and **Reference**, such as the check number. Use **Card** for a card payment taken by phone or terminal.
 3. Under **Apply to invoice lines** or **Apply to orders**, enter how much of the payment covers each one, as the payer's remittance says.
 4. Click **Save**.
@@ -23,13 +23,13 @@ Three shortcuts fill the amounts for you:
 
 The payment and the amounts you applied save together. If the amounts add up to more than the payment, or one is more than its balance, Net Terms saves neither the payment nor the amounts. The form shows why.
 
-Any amount you don't apply stays on the payment, unapplied. It doesn't change what any buyer owes or reopen any buyer's credit until you apply it.
+Any amount you don't apply stays on the payment, unapplied. It doesn't change any buyer's balance or reopen any buyer's credit until you apply it.
 
 ![Recording a check and applying it to an order](../../resources/img/record-payment-orders.png)
 
 ## Applying an unapplied payment
 
-On a payment's page, the same table lists what the account still owes on. Enter the amounts and click **Save**. Applying a payment takes the amount off what the buyer owes, which frees the same amount of their credit.
+On a payment's page, the same table lists the account's open items. Enter the amounts and click **Save**. Applying a payment takes the amount off the buyer's balance, which frees the same amount of their credit.
 
 ![A payment applied to two invoices](../../resources/img/payment-view.png)
 

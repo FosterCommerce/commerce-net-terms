@@ -39,6 +39,7 @@ use fostercommerce\netterms\enums\PaymentMethod;
 use fostercommerce\netterms\enums\SublimitMode;
 use fostercommerce\netterms\errors\InvalidAmountException;
 use fostercommerce\netterms\errors\LedgerException;
+use fostercommerce\netterms\events\DefineAccountAccessEvent;
 use fostercommerce\netterms\events\EntryEvent;
 use fostercommerce\netterms\events\ResolveBuyerEvent;
 use fostercommerce\netterms\gateways\NetTerms;
@@ -211,6 +212,23 @@ function makeBuyer(Account $account, User $user, ?string $sublimit): Buyer
 }
 
 /**
+ * Run a test with an account access handler attached, detaching it after so later checks see the default access.
+ *
+ * @param callable(DefineAccountAccessEvent): void $handler
+ * @param callable(): bool $test
+ */
+function withAccountAccess(callable $handler, callable $test): bool
+{
+	Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, $handler);
+
+	try {
+		return $test();
+	} finally {
+		Event::off(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, $handler);
+	}
+}
+
+/**
  * An order for an existing variant, since Commerce's refund flow needs a purchasable on every line item.
  */
 function makeOrder(User $customer, Variant $variant, int $qty, int $gatewayId): Order
@@ -297,19 +315,39 @@ try {
 	$aliceBuyer = makeBuyer($account, $alice, '300.00');
 	$bobBuyer = makeBuyer($account, $bob, null);
 
+	section('Account access');
+	check('the holder can see the account', fn (): bool => $accounts->canView($account, $holder));
+	check('an active buyer can see the account', fn (): bool => $accounts->canView($account, $bob));
+	check('an inactive buyer can’t see the account', function () use ($accounts, $account): bool {
+		$formerBuyer = makeUser('former');
+		Db::update(Table::BUYERS, [
+			'active' => false,
+		], [
+			'id' => makeBuyer($account, $formerBuyer, null)->id,
+		]);
+
+		return ! $accounts->canView($account, $formerBuyer);
+	});
+	check('a handler can let a user see an account', fn (): bool => withAccountAccess(static function (DefineAccountAccessEvent $event): void {
+		$event->canView = true;
+	}, fn (): bool => $accounts->canView($account, $outsider)));
+	check('a user who can manage an account can see it', fn (): bool => withAccountAccess(static function (DefineAccountAccessEvent $event): void {
+		$event->canManage = true;
+	}, fn (): bool => $accounts->canView($account, $outsider)));
+
 	section('Available credit, ceiling mode');
 
 	check('a buyer with a sublimit starts at the sublimit', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '300.00'));
 	check('a buyer without one starts at the credit limit', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '1000.00'));
 
 	$ledger->adjust($account, $aliceBuyer, money('200.00'), 'Opening balance');
-	check('owing lowers the buyer’s sublimit room', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '100.00'));
-	check('owing lowers everyone else’s account room', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '800.00'));
+	check('a balance lowers the buyer’s sublimit room', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '100.00'));
+	check('a balance lowers everyone else’s account room', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '800.00'));
 
 	$ledger->adjust($account, $bobBuyer, money('750.00'), 'Opening balance');
 	check('one buyer can use up the shared room in ceiling mode', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '50.00'));
 	check('a sublimit never exceeds the account’s room', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '50.00'));
-	check('what the account owes is the sum of its entries', fn (): bool|string => same($accounts->getOwedByAccount($account), '950.00'));
+	check('the account’s balance is the sum of its entries', fn (): bool|string => same($accounts->getBalanceByAccount($account), '950.00'));
 
 	section('Unlimited credit');
 
@@ -346,12 +384,12 @@ try {
 
 	section('Sublimit rules');
 
-	check('a sublimit can’t go below what the buyer owes', function () use ($aliceBuyer, $accounts): bool|string {
+	check('a sublimit can’t go below the buyer’s balance', function () use ($aliceBuyer, $accounts): bool|string {
 		$aliceBuyer->sublimit = money('150.00');
 		$saved = $accounts->saveBuyer($aliceBuyer);
 		$aliceBuyer->sublimit = money('300.00');
 
-		return ! $saved && $aliceBuyer->hasErrors('sublimit') ? true : 'saved a sublimit below what was owed';
+		return ! $saved && $aliceBuyer->hasErrors('sublimit') ? true : 'saved a sublimit below the balance';
 	});
 
 	check('ceiling mode allows sublimits to add up past the limit', function () use ($bobBuyer, $accounts): bool|string {
@@ -414,7 +452,7 @@ try {
 
 	$account->creditLimit = money('2000.00');
 	$accounts->saveAccount($account);
-	check('unreserved room is the limit less what’s owed and every unspent reserve', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '950.00'));
+	check('unreserved room is the limit less the balance and every unspent reserve', fn (): bool|string => same($accounts->getAvailableCredit($bobBuyer), '950.00'));
 
 	$account->status = AccountStatus::Suspended;
 	$accounts->saveAccount($account);
@@ -484,7 +522,7 @@ try {
 		'dateReceived' => new DateTime(),
 	]);
 	check('a payment records', fn () => $payments->recordPayment($check) ? true : json_encode($check->getErrors()));
-	check('an unapplied payment changes no buyer’s balance', fn (): bool|string => same($accounts->getOwedByBuyer($aliceBuyer), '200.00'));
+	check('an unapplied payment changes no buyer’s balance', fn (): bool|string => same($accounts->getBalanceByBuyer($aliceBuyer), '200.00'));
 	check('an unapplied payment changes no available credit', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '50.00'));
 	check('the whole payment starts unapplied', fn (): bool|string => same($payments->getUnapplied($check), '500.00'));
 
@@ -499,9 +537,9 @@ try {
 	});
 
 	$aliceApplication = $payments->applyPayment($check, $aliceLine, money('200.00'));
-	check('applying lowers what the line’s buyer owes', fn (): bool|string => same($accounts->getOwedByBuyer($aliceBuyer), '0.00'));
+	check('applying lowers the balance of the line’s buyer', fn (): bool|string => same($accounts->getBalanceByBuyer($aliceBuyer), '0.00'));
 	check('applying reopens the buyer’s sublimit', fn (): bool|string => same($accounts->getAvailableCredit($aliceBuyer), '250.00'));
-	check('applying leaves other buyers’ balances alone', fn (): bool|string => same($accounts->getOwedByBuyer($bobBuyer), '750.00'));
+	check('applying leaves other buyers’ balances alone', fn (): bool|string => same($accounts->getBalanceByBuyer($bobBuyer), '750.00'));
 	check('the payment’s unapplied credit drops', fn (): bool|string => same($payments->getUnapplied($check), '300.00'));
 
 	check('applying more than the unapplied credit is refused', function () use ($payments, $check, $bobLine): bool|string {
@@ -520,7 +558,7 @@ try {
 	check('voiding an invoice with applications is refused', fn (): true|string => $invoices->voidInvoice($firstInvoice) === false ? true : 'voided');
 
 	$payments->reverseApplication($aliceApplication);
-	check('reversing an application puts the amount back on the buyer', fn (): bool|string => same($accounts->getOwedByBuyer($aliceBuyer), '200.00'));
+	check('reversing an application puts the amount back on the buyer', fn (): bool|string => same($accounts->getBalanceByBuyer($aliceBuyer), '200.00'));
 	check('reversing an application returns it to unapplied credit', fn (): bool|string => same($payments->getUnapplied($check), '200.00'));
 	check('the ledger keeps both the payment and its reversal', function () use ($ledger, $account): bool|string {
 		$types = array_map(static fn ($entry): \fostercommerce\netterms\enums\EntryType => $entry->type, $ledger->getEntriesByAccountId((int) $account->id));
@@ -613,7 +651,7 @@ try {
 	check('the charge is on the ledger for the order total', function () use ($order, $accounts, $outsiderBuyer, $currency): bool|string {
 		$totalPaid = Amounts::toMoney((string) expect(Order::find()->id($order->id)->one(), Order::class)->getTotalPaid(), $currency);
 
-		return same($accounts->getOwedByBuyer($outsiderBuyer), Amounts::toDecimal($totalPaid));
+		return same($accounts->getBalanceByBuyer($outsiderBuyer), Amounts::toDecimal($totalPaid));
 	});
 
 	$bigOrder = makeOrder($outsider, $variant, 1, $gatewayId);
@@ -621,9 +659,9 @@ try {
 	check('its payment form says there isn’t enough credit', fn (): true|string => str_contains((string) $gateway->getPaymentFormHtml([
 		'order' => $bigOrder,
 	]), 'enough available credit') ? true : 'no notice');
-	$owedBeforeDecline = Amounts::toDecimal($accounts->getOwedByBuyer($outsiderBuyer));
+	$balanceBeforeDecline = Amounts::toDecimal($accounts->getBalanceByBuyer($outsiderBuyer));
 	check('a charge over available credit is declined', fn (): true|string => pay($bigOrder) !== null ? true : 'paid');
-	check('a declined charge writes no entry', fn (): bool|string => same($accounts->getOwedByBuyer($outsiderBuyer), $owedBeforeDecline));
+	check('a declined charge writes no entry', fn (): bool|string => same($accounts->getBalanceByBuyer($outsiderBuyer), $balanceBeforeDecline));
 
 	$outsiderInvoice = expect($invoices->issueInvoice($gatewayAccount), Invoice::class);
 	$outsiderLine = $outsiderInvoice->getLines()[0];
@@ -637,17 +675,17 @@ try {
 			}
 		}
 
-		$owedBefore = $accounts->getOwedByBuyer($outsiderBuyer);
+		$buyerBalanceBefore = $accounts->getBalanceByBuyer($outsiderBuyer);
 		$refund = commerce()->getPayments()->refundTransaction(expect($purchase, Transaction::class), 5.0);
 
 		if ($refund->status !== TransactionRecord::STATUS_SUCCESS) {
 			return 'refund ' . $refund->status . ': ' . $refund->message;
 		}
 
-		return $owedBefore->subtract(money('5.00'))->equals($accounts->getOwedByBuyer($outsiderBuyer)) ? true : 'owed ' . Amounts::toDecimal($accounts->getOwedByBuyer($outsiderBuyer));
+		return $buyerBalanceBefore->subtract(money('5.00'))->equals($accounts->getBalanceByBuyer($outsiderBuyer)) ? true : 'balance ' . Amounts::toDecimal($accounts->getBalanceByBuyer($outsiderBuyer));
 	});
 
-	check('a refund of an invoiced charge lowers that invoice line', fn () => $invoices->getLineAmount($outsiderLine)->equals($accounts->getOwedByBuyer($outsiderBuyer)) ? true : 'line ' . Amounts::toDecimal($invoices->getLineAmount($outsiderLine)));
+	check('a refund of an invoiced charge lowers that invoice line', fn () => $invoices->getLineAmount($outsiderLine)->equals($accounts->getBalanceByBuyer($outsiderBuyer)) ? true : 'line ' . Amounts::toDecimal($invoices->getLineAmount($outsiderLine)));
 
 	check('a buyer’s own order charges the account they buy on', function () use ($accounts, $variant, $gatewayId, $account): bool|string {
 		// Stand in for a buyer who doesn't hold the account, signed in and paying for their own order
@@ -679,7 +717,7 @@ try {
 			return json_encode($cardPayment->getErrors());
 		}
 
-		return same($accounts->getOwedByBuyer($outsiderBuyer), '0.00');
+		return same($accounts->getBalanceByBuyer($outsiderBuyer), '0.00');
 	});
 
 	check('the invoice is paid', fn () => $invoices->getStatus($outsiderInvoice) === InvoiceStatus::Paid ? true : $invoices->getStatus($outsiderInvoice)->value);
@@ -700,7 +738,7 @@ try {
 			return 'the paid line changed';
 		}
 
-		return same($accounts->getOwedByBuyer($outsiderBuyer), '-5.00');
+		return same($accounts->getBalanceByBuyer($outsiderBuyer), '-5.00');
 	});
 
 	section('Typed amounts');
@@ -785,15 +823,15 @@ try {
 		});
 		check('a second order charges the same way', fn (): string|true => pay($secondOrder) ?? true);
 		check('order billing writes no ledger entries', fn (): bool|string => $ledger->getEntriesByAccountId((int) $orderAccount->id) === [] ? true : 'entries written');
-		// What is owed is the sum of Commerce's balances on the orders
-		$owedMatchesOrders = static fn (): bool|string => same($accounts->getOwedByBuyer($orderBuyer), Amounts::toDecimal($outstanding($firstOrder)->add($outstanding($secondOrder))));
-		check('what a buyer owes is their orders’ balances', $owedMatchesOrders);
+		// The buyer's balance is the sum of Commerce's balances on the orders
+		$balanceMatchesOrders = static fn (): bool|string => same($accounts->getBalanceByBuyer($orderBuyer), Amounts::toDecimal($outstanding($firstOrder)->add($outstanding($secondOrder))));
+		check('a buyer’s balance is their orders’ balances', $balanceMatchesOrders);
 		check('both orders are open, oldest first', function () use ($creditOrders, $orderAccount, $firstOrder, $secondOrder): bool|string {
 			$openIds = array_map(static fn (Order $openOrder): int => (int) $openOrder->id, $creditOrders->getOpenOrders($orderAccount));
 
 			return $openIds === [(int) $firstOrder->id, (int) $secondOrder->id] ? true : json_encode($openIds);
 		});
-		check('the gateway isn’t offered to pay what a completed order owes', fn (): string|true => $gateway->availableForUseWithOrder($reload($firstOrder)) === false ? true : 'offered');
+		check('the gateway isn’t offered to pay a completed order’s balance', fn (): string|true => $gateway->availableForUseWithOrder($reload($firstOrder)) === false ? true : 'offered');
 
 		$firstTotal = $outstanding($firstOrder);
 		[$secondHalf] = $outstanding($secondOrder)->allocateTo(2);
@@ -824,7 +862,7 @@ try {
 
 			return 'no capture';
 		});
-		check('what is owed follows the payments', $owedMatchesOrders);
+		check('the balance follows the payments', $balanceMatchesOrders);
 		check('the rest of the check stays unapplied', fn (): bool|string => same($payments->getUnapplied($check), '10.00'));
 		check('applying more than an order’s balance is refused', function () use ($creditOrders, $check, $secondOrder, $outstanding): bool|string {
 			try {
@@ -877,7 +915,7 @@ try {
 			return 'no application';
 		});
 
-		check('a payment made online lowers what is owed with nothing recorded by Net Terms', function () use ($secondOrder, $reload, $payments, $orderAccount, $owedMatchesOrders): bool|string {
+		check('a payment made online lowers the balance with nothing recorded by Net Terms', function () use ($secondOrder, $reload, $payments, $orderAccount, $balanceMatchesOrders): bool|string {
 			$onlineOrder = $reload($secondOrder);
 			/** @var craft\commerce\base\GatewayInterface|null $onlineGateway */
 			$onlineGateway = commerce()->getGateways()->getAllGateways()->first(static fn (mixed $gateway): bool => ! $gateway instanceof NetTerms);
@@ -893,7 +931,7 @@ try {
 				return 'a payment was recorded';
 			}
 
-			return $owedMatchesOrders();
+			return $balanceMatchesOrders();
 		});
 
 		check('a Commerce refund of a check’s capture reopens the order and counts as refunded', function () use ($firstOrder, $reload, $check, $payments, $outstanding): bool|string {
@@ -917,9 +955,9 @@ try {
 
 			return same($payments->getRefunded($check), '5.00');
 		});
-		check('what is owed follows the refund', $owedMatchesOrders);
+		check('the balance follows the refund', $balanceMatchesOrders);
 
-		check('an edited order total changes what is owed with no ledger entry', function () use ($firstOrder, $reload, $variant, $ledger, $orderAccount, $owedMatchesOrders): bool|string {
+		check('an edited order total changes the balance with no ledger entry', function () use ($firstOrder, $reload, $variant, $ledger, $orderAccount, $balanceMatchesOrders): bool|string {
 			$editedOrder = $reload($firstOrder);
 			$editedOrder->setRecalculationMode(Order::RECALCULATION_MODE_ALL);
 			$editedOrder->setLineItems([
@@ -934,10 +972,10 @@ try {
 				return 'entries written';
 			}
 
-			return $owedMatchesOrders();
+			return $balanceMatchesOrders();
 		});
 
-		check('an account that owes money is unsettled', fn (): bool|string => in_array($orderAccount->id, array_map(static fn (Account $unsettled): ?int => $unsettled->id, $accounts->getUnsettledAccounts()), true) ? true : 'settled');
+		check('an account with a balance is unsettled', fn (): bool|string => in_array($orderAccount->id, array_map(static fn (Account $unsettled): ?int => $unsettled->id, $accounts->getUnsettledAccounts()), true) ? true : 'settled');
 		check('the payment type can’t change while an account is unsettled', function () use ($gateway): bool|string {
 			$changed = clone $gateway;
 			$changed->paymentType = TransactionRecord::TYPE_PURCHASE;
@@ -976,13 +1014,13 @@ try {
 
 			return expect(Order::find()->id($editOrder->id)->one(), Order::class);
 		};
-		// The ledger and Commerce both follow the edit: what the buyer owes is the order's total, and the order stays paid
+		// The ledger and Commerce both follow the edit: the buyer's balance is the order's total, and the order stays paid
 		$followsEdit = static function (Order $edited) use ($accounts, $editBuyer, $currency): bool|string {
 			if ($edited->getPaidStatus() !== Order::PAID_STATUS_PAID) {
 				return $edited->getPaidStatus();
 			}
 
-			return same($accounts->getOwedByBuyer($editBuyer), Amounts::toDecimal(Amounts::toMoney((string) $edited->getTotalPrice(), $currency)));
+			return same($accounts->getBalanceByBuyer($editBuyer), Amounts::toDecimal(Amounts::toMoney((string) $edited->getTotalPrice(), $currency)));
 		};
 
 		check('an order paid on account in invoice billing', fn (): string|true => pay($editOrder) ?? true);
@@ -1026,14 +1064,14 @@ try {
 			$online->status = TransactionRecord::STATUS_SUCCESS;
 			commerce()->getTransactions()->saveTransaction($online);
 			$paid->updateOrderPaidInformation();
-			$owedBefore = $accounts->getOwedByBuyer($editBuyer);
+			$buyerBalanceBefore = $accounts->getBalanceByBuyer($editBuyer);
 			$runQueue();
 
 			$settled = expect(Order::find()->id($editOrder->id)->one(), Order::class);
 
-			return $accounts->getOwedByBuyer($editBuyer)->equals($owedBefore) && $settled->getPaidStatus() === Order::PAID_STATUS_PAID
+			return $accounts->getBalanceByBuyer($editBuyer)->equals($buyerBalanceBefore) && $settled->getPaidStatus() === Order::PAID_STATUS_PAID
 				? true
-				: $settled->getPaidStatus() . ', owed ' . Amounts::toDecimal($accounts->getOwedByBuyer($editBuyer));
+				: $settled->getPaidStatus() . ', balance ' . Amounts::toDecimal($accounts->getBalanceByBuyer($editBuyer));
 		});
 
 		$cutHolder = makeUser('cutholder');
@@ -1067,7 +1105,7 @@ try {
 			}
 
 			return $cut->getPaidStatus() === Order::PAID_STATUS_PAID
-				? same($accounts->getOwedByBuyer($cutBuyer), Amounts::toDecimal(Amounts::toMoney((string) $cut->getTotalPrice(), $currency)))
+				? same($accounts->getBalanceByBuyer($cutBuyer), Amounts::toDecimal(Amounts::toMoney((string) $cut->getTotalPrice(), $currency)))
 				: $cut->getPaidStatus();
 		});
 		check('the order editor shows an error when a raise doesn’t fit available credit', function () use ($cutOrder, $variant): bool|string {
@@ -1083,7 +1121,7 @@ try {
 			return $edited->hasErrors('totalPrice') ? true : 'no error';
 		});
 		check('a raise that doesn’t fit fails the job with the reason and changes nothing', function () use ($creditOrders, $accounts, $cutOrder, $variant, $runQueue, $cutBuyer): bool|string {
-			$owedBefore = $accounts->getOwedByBuyer($cutBuyer);
+			$buyerBalanceBefore = $accounts->getBalanceByBuyer($cutBuyer);
 			$setQtyUnvalidated = static function (int $qty) use ($cutOrder, $variant): Order {
 				$edited = expect(Order::find()->id($cutOrder->id)->one(), Order::class);
 				$edited->setRecalculationMode(Order::RECALCULATION_MODE_ALL);
@@ -1098,7 +1136,7 @@ try {
 				return $edited;
 			};
 			// Leave the buyer no room, so a one-unit raise doesn't fit
-			$cutBuyer->sublimit = $owedBefore;
+			$cutBuyer->sublimit = $buyerBalanceBefore;
 			if (! $accounts->saveBuyer($cutBuyer)) {
 				return 'sublimit not saved: ' . json_encode($cutBuyer->getErrors());
 			}
@@ -1123,10 +1161,10 @@ try {
 				return 'no failure';
 			}
 
-			return $accounts->getOwedByBuyer($cutBuyer)->equals($owedBefore) ? true : 'owed changed';
+			return $accounts->getBalanceByBuyer($cutBuyer)->equals($buyerBalanceBefore) ? true : 'balance changed';
 		});
 		check('a retried edit job settles the edit once', function () use ($creditOrders, $cutOrder, $variant, $unitPrice, $runQueue, $accounts, $cutBuyer): bool|string {
-			$owedBefore = $accounts->getOwedByBuyer($cutBuyer);
+			$buyerBalanceBefore = $accounts->getBalanceByBuyer($cutBuyer);
 			$edited = expect(Order::find()->id($cutOrder->id)->one(), Order::class);
 			$edited->setRecalculationMode(Order::RECALCULATION_MODE_ALL);
 			$edited->setLineItems([
@@ -1142,7 +1180,7 @@ try {
 			$creditOrders->followTotalChange((int) $cutOrder->id, Amounts::toDecimal($unitPrice), 'net-terms-edit:check-retry', null);
 			$runQueue();
 
-			return same($accounts->getOwedByBuyer($cutBuyer)->subtract($owedBefore), Amounts::toDecimal($unitPrice));
+			return same($accounts->getBalanceByBuyer($cutBuyer)->subtract($buyerBalanceBefore), Amounts::toDecimal($unitPrice));
 		});
 	} finally {
 		$payingUserId = null;
@@ -1376,13 +1414,13 @@ try {
 		$payingUserId = $switchHolder->id;
 		pay(makeOrder($switchHolder, $variant, 1, $gatewayId));
 		$switchInvoice = expect($invoices->issueInvoice($switchAccount), Invoice::class);
-		// Credit the account outside the invoice, so it owes nothing overall while the invoice stays unpaid
+		// Credit the account outside the invoice, so its balance is $0 while the invoice stays unpaid
 		$ledger->adjust($switchAccount, $switchBuyer, $invoices->getTotal($switchInvoice)->negative(), 'Credit');
 
-		check('an unpaid invoice blocks a payment type change even when the account owes $0', function () use ($accounts, $switchAccount): bool|string {
+		check('an unpaid invoice blocks a payment type change even when the account’s balance is $0', function () use ($accounts, $switchAccount): bool|string {
 			$isUnsettled = in_array($switchAccount->id, array_map(static fn (Account $unsettled): ?int => $unsettled->id, $accounts->getUnsettledAccounts()), true);
 
-			return $accounts->getOwedByAccount($switchAccount)->isZero() && $isUnsettled ? true : 'owed ' . Amounts::toDecimal($accounts->getOwedByAccount($switchAccount)) . ', unsettled ' . json_encode($isUnsettled);
+			return $accounts->getBalanceByAccount($switchAccount)->isZero() && $isUnsettled ? true : 'balance ' . Amounts::toDecimal($accounts->getBalanceByAccount($switchAccount)) . ', unsettled ' . json_encode($isUnsettled);
 		});
 		check('voiding the invoice settles the account', function () use ($accounts, $invoices, $switchAccount, $switchInvoice): bool|string {
 			$invoices->voidInvoice($switchInvoice);
@@ -1411,19 +1449,19 @@ try {
 			return ! $deleted && Order::find()->id($invoicedOrder->id)->exists() ? true : 'deleted';
 		});
 
-		$owedWithoutLooseOrder = $accounts->getOwedByAccount($deleteAccount);
+		$balanceWithoutLooseOrder = $accounts->getBalanceByAccount($deleteAccount);
 		$looseOrder = makeOrder($deleteHolder, $variant, 1, $gatewayId);
 		pay($looseOrder);
-		$owedWithOrder = $accounts->getOwedByAccount($deleteAccount);
+		$balanceWithOrder = $accounts->getBalanceByAccount($deleteAccount);
 
-		check('a trashed order stops counting toward what is owed', function () use ($elements, $looseOrder, $accounts, $deleteAccount, $owedWithoutLooseOrder): bool|string {
+		check('a trashed order stops counting toward the balance', function () use ($elements, $looseOrder, $accounts, $deleteAccount, $balanceWithoutLooseOrder): bool|string {
 			$elements->deleteElementById((int) $looseOrder->id, Order::class);
 
-			return same($accounts->getOwedByAccount($deleteAccount), Amounts::toDecimal($owedWithoutLooseOrder));
+			return same($accounts->getBalanceByAccount($deleteAccount), Amounts::toDecimal($balanceWithoutLooseOrder));
 		});
 		check('a trashed order blocks a payment type change', fn (): bool|string => $accounts->hasTrashedOrders($deleteAccount) ? true : 'not blocked');
 		check('a trashed order isn’t invoiced', fn (): bool|string => $invoices->issueInvoice($deleteAccount) === null ? true : 'invoiced');
-		check('restoring the order counts it again and the next invoice bills it', function () use ($elements, $looseOrder, $accounts, $deleteAccount, $owedWithOrder, $invoices): bool|string {
+		check('restoring the order counts it again and the next invoice bills it', function () use ($elements, $looseOrder, $accounts, $deleteAccount, $balanceWithOrder, $invoices): bool|string {
 			$trashed = expect(Order::find()->id($looseOrder->id)->trashed()->one(), Order::class);
 			$elements->restoreElement($trashed);
 			$invoice = $invoices->issueInvoice($deleteAccount);
@@ -1434,7 +1472,7 @@ try {
 
 			$voided = $invoices->voidInvoice($invoice);
 
-			return $voided ? same($accounts->getOwedByAccount($deleteAccount), Amounts::toDecimal($owedWithOrder)) : 'not voided';
+			return $voided ? same($accounts->getBalanceByAccount($deleteAccount), Amounts::toDecimal($balanceWithOrder)) : 'not voided';
 		});
 		check('deleting the order for good removes its ledger entries', function () use ($elements, $looseOrder): bool|string {
 			$entryIds = (new craft\db\Query())->select(['id'])->from(Table::ENTRIES)->where([
@@ -1465,7 +1503,7 @@ try {
 	check('a buyer over their sublimit shows by how much', fn (): bool|string => same($accounts->getOverSublimitByBuyerId($overAccount)[(int) $overBuyer->id] ?? null, '80.00'));
 	check('an account within its limit shows nothing over', fn (): bool|string => $accounts->getOverLimit($account) === null ? true : 'over');
 	check('a buyer over their sublimit can still be saved unchanged', fn (): bool|string => $accounts->saveBuyer($overBuyer) ? true : json_encode($overBuyer->getErrors()));
-	check('lowering a sublimit below what is owed is still refused', function () use ($accounts, $overBuyer): bool|string {
+	check('lowering a sublimit below the balance is still refused', function () use ($accounts, $overBuyer): bool|string {
 		$overBuyer->sublimit = money('40.00');
 		$saved = $accounts->saveBuyer($overBuyer);
 		$overBuyer->sublimit = money('50.00');

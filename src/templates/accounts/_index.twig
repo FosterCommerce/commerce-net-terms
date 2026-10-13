@@ -19,7 +19,7 @@
 					<th>{{ 'account.holder'|t('net-terms') }}</th>
 					<th>{{ 'account.status'|t('net-terms') }}</th>
 					<th class="nt-amount">{{ 'account.creditLimit'|t('net-terms') }}</th>
-					<th class="nt-amount">{{ 'account.owed'|t('net-terms') }}</th>
+					<th class="nt-amount">{{ 'account.balance'|t('net-terms') }}</th>
 					<th class="nt-amount">{{ 'account.available'|t('net-terms') }}</th>
 					<th class="nt-amount">{{ 'account.unapplied'|t('net-terms') }}</th>
 				</tr>
@@ -37,7 +37,7 @@
 							<span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}
 						</td>
 						<td class="nt-amount">{{ account.creditLimit ? account.creditLimit|money : 'account.unlimitedShort'|t('net-terms') }}</td>
-						<td class="nt-amount">{{ figures.owed|money }}</td>
+						<td class="nt-amount">{{ figures.balance|money }}</td>
 						<td class="nt-amount">
 							{{ figures.room ? figures.room|money : 'account.unlimitedShort'|t('net-terms') }}
 							{% if figures.overLimit %}<div class="nt-negative smalltext">{{ 'account.overLimit'|t('net-terms', { amount: figures.overLimit|money }) }}</div>{% endif %}

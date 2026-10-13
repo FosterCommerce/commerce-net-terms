@@ -2,12 +2,12 @@
 
 # Net Terms
 
-Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks what each buyer owes, and applies recorded payments to invoices or orders.
+Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tracks each buyer's balance, and applies recorded payments to invoices or orders.
 
 ## Overview
 
 - Sell to business customers on terms through your normal checkout: open an account with payment terms and a limit (Net 30 on $10,000), or no limit when a customer only needs billing, and list Net Terms beside your other payment methods.
-- Control spending per person: give each buyer a sublimit (an office manager can owe up to $2,000), set by your staff, or by the company's own admins from storefront templates you build.
+- Control spending per person: give each buyer a sublimit (an office manager can have a balance of up to $2,000), set by your staff, or by the company's own admins from storefront templates you build.
 - Keep receivables in Craft: invoice each account with one line per buyer, or bill by the orders themselves, leaving each one unpaid under a label like "Pay via check/ACH" for the customer to pay later, online or by check.
 - Apply each check, ACH, wire or card payment the way the remittance says, split across the invoices or orders it covers.
 - Get paid without chasing: Net Terms emails each customer on the days you choose before an invoice or order is due and after it's overdue, from one daily console command.

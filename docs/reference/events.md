@@ -53,7 +53,7 @@ Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, function (ResolveBuyer
 
 ## Accounts::EVENT_DEFINE_ACCOUNT_ACCESS
 
-**Fires:** when the storefront checks whether a user can manage buyers and sublimits on an account, and when `craft.netTerms` checks whether to show an account to a user who isn't its holder or an active buyer.
+**Fires:** when `net-terms/storefront/save-buyer`, `net-terms/storefront/remove-buyer` or `craft.netTerms.canManage()` checks whether a user can manage an account's buyers and sublimits, and when `craft.netTerms` or `net-terms/storefront/invoice-pdf` checks whether a user can see an account.
 
 **Payload:** `fostercommerce\netterms\events\DefineAccountAccessEvent`
 
@@ -61,7 +61,8 @@ Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, function (ResolveBuyer
 |---|---|---|
 | `account` | `Account` | The account. |
 | `user` | `User` | The user asking. |
-| `canManage` | `bool` | Defaults to whether the user is the holder. |
+| `canManage` | `bool` | Whether the user can manage buyers and sublimits. Defaults to whether the user is the holder. |
+| `canView` | `bool` | Whether `craft.netTerms` returns the account's figures, buyers, invoices and orders to the user, and whether `net-terms/storefront/invoice-pdf` serves its invoice PDFs. Defaults to whether the user is the holder or an active buyer. A user who can manage the account can always see it. |
 
 **Listen:**
 
@@ -72,10 +73,11 @@ use yii\base\Event;
 
 Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, function (DefineAccountAccessEvent $event) {
 	$event->canManage = MyCompanies::isAdmin($event->user, $event->account->holderId);
+	$event->canView = MyCompanies::isMember($event->user, $event->account->holderId);
 });
 ```
 
-**Common use:** letting a company's admins manage its account.
+**Common use:** letting a company's admins manage its account, and letting other company members see it without buying on it.
 
 ## Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY
 

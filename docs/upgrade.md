@@ -44,7 +44,23 @@ New invoice numbers start with `INV-` in place of `CL-`. To keep `CL-`, set **In
 
 The settings are in **Net Terms -> Settings**. **Settings -> Plugins -> Net Terms** opens that page.
 
+### Twig API
+
+`craft.netTerms.getOwed()` is now `getBalance()`, and `getOwedByBuyer()` is now `getBalanceByBuyer()`. Rename the calls in your templates.
+
 ### PHP API
 
 - `Reminders::getSystemMessages()` and `ReminderType::messageKey()` are removed.
 - `Reminders::sendReminders()` takes the start and end of a window, and sends only the reminders whose moment falls in it.
+- `Accounts::getOwedByAccount()` is now `getBalanceByAccount()`, `Accounts::getOwedByBuyer()` is now `getBalanceByBuyer()`, and `Accounts::getOwedByBuyers()` is now `getBalanceByBuyers()`.
+- `Ledger::getOwedByBuyers()` is now `getBalanceByBuyers()`, and `CreditOrders::getOwedByBuyerId()` is now `getBalanceByBuyerId()`.
+- `Accounts::getAccountFigures()` returns the account's balance under `balance` in place of `owed`.
+- The `$owedByBuyerId` parameter of `Accounts::getOverSublimitByBuyerId()` and `Accounts::getAvailableCreditByBuyerId()` is now `$balanceByBuyerId`. Rename it in calls that pass it by name.
+
+### Translation keys
+
+The `account.owed`, `buyer.owes` and `buyer.sublimitBelowOwed` keys are now `account.balance`, `buyer.balance` and `buyer.sublimitBelowBalance`, and `buyer.sublimitBelowBalance` takes `{balance}` in place of `{owed}`. Rename them in any `translations/*/net-terms.php` file on your site.
+
+The `email.invoiceSubject`, `email.invoiceHeading`, `email.viewAndPay`, `reminder.orderLabel`, and due-soon and overdue `reminder.*` keys are removed. Move translated wording into the emails in **Net Terms -> Emails**, and for order-billing reminders into the Commerce email each one sends.
+
+The `invoice.issueAndSend` and `invoice.issueConfirm` keys, `settings.remindersInstructions`, and the `settings.*` keys of the removed **Due-soon reminder**, **Overdue reminder**, **Invoice email template** and **Storefront order path** settings are also removed.

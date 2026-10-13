@@ -9,7 +9,7 @@
 - Added the ability to choose the Commerce email each order-billing reminder sends.
 - Added invoice PDFs, their settings, and `craft.netTerms.getInvoicePdfUrl()`.
 - Added draft invoices, invoice notes, and the ability to choose an invoice’s due date.
-- Added `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY`.
+- Added `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY`, `Accounts::canView()` and `DefineAccountAccessEvent::$canView`.
 
 ### Changed
 - Invoices are now issued from a “New invoice” page, and `net-terms/invoices/issue` skips accounts with a draft.
@@ -18,10 +18,11 @@
 - `net-terms/reminders/send` now sends only the reminders whose moment falls on the day it runs.
 - Lowering a completed order’s total now takes the change off its invoice line when the line’s balance covers it.
 - The `net-terms/storefront/save-buyer` action now refuses to add a buyer unless an `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` handler allows the user.
+- Renamed every `getOwed…()` method to `getBalance…()`, in `craft.netTerms`, `Accounts`, `Ledger` and `CreditOrders`, and `Accounts::getAccountFigures()` now returns the account’s balance under `balance` instead of `owed`. The upgrade guide lists each one.
+- `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` now also fires when a holder or active buyer views an account.
 
 ### Removed
-- Removed the `dueSoonReminderDays`, `overdueReminderDays`, “Invoice email template” and “Storefront order path” settings.
-- Removed the due-soon and overdue system messages, and `Reminders::getSystemMessages()`.
+- Removed the `dueSoonReminderDays`, `overdueReminderDays`, “Invoice email template” and “Storefront order path” settings, the due-soon and overdue system messages, and `Reminders::getSystemMessages()`.
 
 ### Fixed
 - Fixed a bug where the payment summary showed amounts 100 times too large in some locales.

@@ -298,14 +298,14 @@ class AccountsController extends Controller
 
 		switch ($tab) {
 			case 'buyers':
-				$owedByBuyerId = $plugin->getAccounts()->getOwedByBuyers($account);
+				$balanceByBuyerId = $plugin->getAccounts()->getBalanceByBuyers($account);
 
 				return [
 					'buyers' => $this->loadBuyerUsers($account->getBuyers()),
 					'zero' => Amounts::zero($account->getCurrency()),
-					'owedByBuyerId' => $owedByBuyerId,
-					'availableByBuyerId' => $plugin->getAccounts()->getAvailableCreditByBuyerId($account, $owedByBuyerId),
-					'overSublimitByBuyerId' => $plugin->getAccounts()->getOverSublimitByBuyerId($account, $owedByBuyerId),
+					'balanceByBuyerId' => $balanceByBuyerId,
+					'availableByBuyerId' => $plugin->getAccounts()->getAvailableCreditByBuyerId($account, $balanceByBuyerId),
+					'overSublimitByBuyerId' => $plugin->getAccounts()->getOverSublimitByBuyerId($account, $balanceByBuyerId),
 				];
 			case 'invoices':
 				$paginator = $plugin->getInvoices()->getInvoicePaginator((int) $account->id, $currentPage, InvoicesController::PAGE_SIZE);
@@ -363,7 +363,7 @@ class AccountsController extends Controller
 	}
 
 	/**
-	 * Order billing has no adjustments, since the orders’ balances are what is owed.
+	 * Order billing has no adjustments, since the account’s balance is its orders’ balances.
 	 */
 	private function requireInvoiceBilling(): void
 	{

@@ -425,7 +425,7 @@ class Payments extends Component
 	}
 
 	/**
-	 * Apply part of a payment to an invoice line, reducing what that line’s buyer owes.
+	 * Apply part of a payment to an invoice line, reducing the balance of that line’s buyer.
 	 *
 	 * @throws LedgerException if the amount doesn’t fit the payment or the line, or the account is locked by another request
 	 */

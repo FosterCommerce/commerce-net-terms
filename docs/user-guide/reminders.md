@@ -106,7 +106,7 @@ The template receives Commerce's usual `order`, and `orderData.netTerms` with th
 | `orderData.netTerms.type` | `dueSoon` or `overdue`. |
 | `orderData.netTerms.days` | The reminder's days before or after the due date. |
 | `orderData.netTerms.dateDue` | The due date, a `DateTime`. |
-| `orderData.netTerms.amountDue` | What the order still owes, formatted. |
+| `orderData.netTerms.amountDue` | The order's balance due, formatted. |
 
 ```twig
 {% set reminder = orderData.netTerms %}

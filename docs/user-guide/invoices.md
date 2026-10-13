@@ -1,6 +1,6 @@
 # Invoices
 
-How what an account owes is billed, and what happens to an invoice as it is paid.
+How an account's balance is billed, and what happens to an invoice as it is paid.
 
 Invoices are issued only in invoice billing. In [order billing](./order-billing.md), the orders are the bills.
 

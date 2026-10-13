@@ -23,8 +23,8 @@ A job fails without changing the order or the ledger when the order's new total 
 
 The Net Terms gateway's payment type changes only while every account is [settled](./order-billing.md#choosing-order-billing). An unapplied payment also blocks the change. For each named account:
 
-1. Apply its unapplied payments to what it owes, then record and apply payments for the rest.
-2. Pay or void each unpaid invoice. An account can owe $0 and still have an unpaid invoice, for example when a refund on one buyer's order couldn't go on its paid invoice line. Void that invoice. If **Void invoice** is refused because payments are applied to it, reverse those payments on the invoice's page, void it, issue a new invoice, and apply the payments again.
+1. Apply its unapplied payments to its invoice lines or orders, then record and apply payments for the rest.
+2. Pay or void each unpaid invoice. An account can have a $0 balance and still have an unpaid invoice, for example when a refund on one buyer's order couldn't go on its paid invoice line. Void that invoice. If **Void invoice** is refused because payments are applied to it, reverse those payments on the invoice's page, void it, issue a new invoice, and apply the payments again.
 3. Restore or permanently delete each of its orders in the trash.
 
 ## A second Net Terms gateway won't save
@@ -37,7 +37,7 @@ Credit reopens when you apply the payment to the buyer's invoice line or order, 
 
 ## A sublimit won't save
 
-A sublimit can't be lower than what the buyer owes. On an account with **Protect sublimits** on and a credit limit, the sublimits can't add up to more than the limit.
+A sublimit can't be lower than the buyer's balance. On an account with **Protect sublimits** on and a credit limit, the sublimits can't add up to more than the limit.
 
 ## A credit limit won't save
 
