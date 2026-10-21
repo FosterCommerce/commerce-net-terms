@@ -9,6 +9,7 @@
 - Added the ability to choose the Commerce email each order-billing reminder sends.
 - Added invoice PDFs, their settings, and `craft.netTerms.getInvoicePdfUrl()`.
 - Added draft invoices, invoice notes, and the ability to choose an invoice’s due date.
+- Added the “Additional billing email” and “Send invoices to” account settings.
 - Added `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY`, `Accounts::canView()` and `DefineAccountAccessEvent::$canView`.
 
 ### Changed

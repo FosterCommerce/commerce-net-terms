@@ -66,7 +66,7 @@ For how the new due date affects reminders, see [reminders](./reminders.md#when-
 | Paid | The balance is zero. |
 | Voided | The invoice was voided, and its entries go on the next invoice. |
 
-An invoice past its due date with a balance shows as **Overdue**. To email the account holder before and after an invoice's due date, see [reminders](./reminders.md).
+An invoice past its due date with a balance shows as **Overdue**. To send reminders before and after an invoice's due date, see [reminders](./reminders.md).
 
 ## The invoice email
 

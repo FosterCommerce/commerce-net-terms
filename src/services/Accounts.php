@@ -698,6 +698,9 @@ class Accounts extends Component
 			'holderId' => $record->holderId,
 			'sublimitMode' => $record->sublimitMode !== null ? SublimitMode::from($record->sublimitMode) : null,
 			'paymentTerms' => $record->paymentTerms,
+			'additionalBillingEmail' => $record->additionalBillingEmail,
+			'sendInvoicesToHolder' => (bool) $record->sendInvoicesToHolder,
+			'sendInvoicesToAdditionalBillingEmail' => (bool) $record->sendInvoicesToAdditionalBillingEmail,
 			'status' => AccountStatus::from($record->status),
 			'dateCreated' => DateTimeHelper::toDateTime($record->dateCreated) ?: null,
 			'dateUpdated' => DateTimeHelper::toDateTime($record->dateUpdated) ?: null,
@@ -779,6 +782,9 @@ class Accounts extends Component
 		$record->creditLimit = $account->unlimited || ! $account->creditLimit instanceof Money ? null : Amounts::toDecimal($account->creditLimit);
 		$record->sublimitMode = $account->sublimitMode?->value;
 		$record->paymentTerms = $account->paymentTerms;
+		$record->additionalBillingEmail = $account->additionalBillingEmail;
+		$record->sendInvoicesToHolder = $account->sendInvoicesToHolder;
+		$record->sendInvoicesToAdditionalBillingEmail = $account->sendInvoicesToAdditionalBillingEmail;
 		$record->status = $account->status->value;
 	}
 

@@ -14,6 +14,8 @@ One account per customer per store.
 | `creditLimit` | decimal | Null for unlimited credit. |
 | `sublimitMode` | string | `ceiling`, `reserved`, or null for the plugin default. |
 | `paymentTerms` | int | Days. Null for the plugin default. |
+| `additionalBillingEmail` | string | Null for no additional address. |
+| `sendInvoicesToHolder`, `sendInvoicesToAdditionalBillingEmail` | bool | Which addresses receive emails to the account holder. Default `true`. `sendInvoicesToAdditionalBillingEmail` is ignored while `additionalBillingEmail` is null. |
 | `status` | string | `active` or `suspended`. Default `active`. |
 
 ## netterms_buyers

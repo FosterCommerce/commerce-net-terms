@@ -73,7 +73,7 @@ class Plugin extends BasePlugin
 
 	public bool $hasReadOnlyCpSettings = true;
 
-	public string $schemaVersion = '2.0.0';
+	public string $schemaVersion = '2.0.1';
 
 	/**
 	 * @var array<int, string>

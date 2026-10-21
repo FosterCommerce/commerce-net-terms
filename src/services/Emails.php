@@ -242,7 +242,15 @@ class Emails extends Component
 		$recipients = [];
 
 		if ($email->sendToHolder) {
-			$recipients[] = $invoice->getAccount()->getHolder()?->email;
+			$account = $invoice->getAccount();
+
+			if ($account->sendInvoicesToHolder) {
+				$recipients[] = $account->getHolder()?->email;
+			}
+
+			if ($account->sendInvoicesToAdditionalBillingEmail) {
+				$recipients[] = $account->additionalBillingEmail;
+			}
 		}
 
 		if ($email->sendToBuyers) {
@@ -251,7 +259,13 @@ class Emails extends Component
 			}
 		}
 
-		return array_values(array_unique(array_filter($recipients)));
+		// Send once per inbox when addresses differ only in case
+		$recipientsByAddress = [];
+		foreach (array_filter($recipients) as $recipient) {
+			$recipientsByAddress[mb_strtolower($recipient)] ??= $recipient;
+		}
+
+		return array_values($recipientsByAddress);
 	}
 
 	/**

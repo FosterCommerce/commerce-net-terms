@@ -16,6 +16,9 @@ use fostercommerce\netterms\db\Table;
  * @property string|null $creditLimit
  * @property string|null $sublimitMode
  * @property int|null $paymentTerms
+ * @property string|null $additionalBillingEmail
+ * @property bool $sendInvoicesToHolder
+ * @property bool $sendInvoicesToAdditionalBillingEmail
  * @property string $status
  * @property string $dateCreated
  * @property string $dateUpdated

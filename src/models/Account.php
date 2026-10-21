@@ -9,6 +9,7 @@ use craft\base\Model;
 use craft\commerce\models\Store;
 use craft\commerce\Plugin as Commerce;
 use craft\elements\User;
+use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use DateTime;
 use fostercommerce\netterms\enums\AccountStatus;
@@ -46,6 +47,18 @@ class Account extends Model
 	 * Days until an invoice is due. Null uses the plugin's default.
 	 */
 	public ?int $paymentTerms = null;
+
+	/**
+	 * Null for no additional address.
+	 */
+	public ?string $additionalBillingEmail = null;
+
+	public bool $sendInvoicesToHolder = true;
+
+	/**
+	 * Ignored while the account has no additional billing email.
+	 */
+	public bool $sendInvoicesToAdditionalBillingEmail = true;
 
 	public AccountStatus $status = AccountStatus::Active;
 
@@ -131,6 +144,15 @@ class Account extends Model
 		}
 	}
 
+	public function validateInvoiceRecipients(string $attribute): void
+	{
+		$sendsToAdditionalBillingEmail = $this->sendInvoicesToAdditionalBillingEmail && $this->additionalBillingEmail !== null;
+
+		if (! $this->sendInvoicesToHolder && ! $sendsToAdditionalBillingEmail) {
+			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'account.invoiceRecipientsRequired'));
+		}
+	}
+
 	/**
 	 * @return array<int, mixed>
 	 */
@@ -144,7 +166,17 @@ class Account extends Model
 			[['paymentTerms'],
 				'integer',
 				'min' => 0],
+			[['additionalBillingEmail'], 'trim'],
+			[['additionalBillingEmail'], 'default'],
+			[['additionalBillingEmail'],
+				'email',
+				'enableIDN' => App::supportsIdn(),
+				'enableLocalIDN' => App::supportsIdn()],
+			[['additionalBillingEmail'],
+				'string',
+				'max' => 255],
 			[['creditLimit'], 'validateCreditLimit'],
+			[['sendInvoicesToHolder'], 'validateInvoiceRecipients'],
 		];
 	}
 }

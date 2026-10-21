@@ -82,6 +82,12 @@
 					<span class="nt-stat-label">{{ 'account.status'|t('net-terms') }}</span>
 					<span class="nt-stat-value"><span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}</span>
 				</div>
+				{% if billing.value == 'invoices' and account.additionalBillingEmail %}
+					<div class="nt-stat">
+						<span class="nt-stat-label">{{ 'account.additionalBillingEmail'|t('net-terms') }}</span>
+						<span class="nt-stat-value">{{ account.additionalBillingEmail }}</span>
+					</div>
+				{% endif %}
 			{% endif %}
 		</div>
 	{% endif %}

@@ -12,7 +12,7 @@ By default an order charges the account its customer holds, or else the one acco
 | `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` | Whether `net-terms/storefront/save-buyer` can add a user as a buyer | No one |
 | `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY` | Whether a user can hold a new account | Any user |
 
-To charge a company, make a user that represents the company the account's holder, and let the company's admins manage it.
+To charge a company, make a user that represents the company the account's holder, and let the company's admins manage it. In invoice billing, to send the company's invoices to its billing inbox, set the account's [Additional billing email](../user-guide/accounts-and-buyers.md#accounts).
 
 ## Example
 

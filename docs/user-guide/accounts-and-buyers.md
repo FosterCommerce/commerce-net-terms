@@ -10,11 +10,13 @@ An account's page has tabs for **Account**, with the settings below, then **Buye
 
 | Setting | What it does |
 |---|---|
-| Account holder | The customer the account belongs to, who receives its invoices. Set once, when the account is created. Net Terms adds the holder as the account's first buyer, with no sublimit. |
+| Account holder | The customer the account belongs to. Set once, when the account is created. Net Terms adds the holder as the account's first buyer, with no sublimit. |
 | Unlimited credit | Removes the credit limit. Buyers' sublimits still apply, and **Available** shows **Unlimited** for a buyer without one. |
 | Credit limit | The highest balance the account can have. |
 | Protect sublimits | Whether each buyer's sublimit is protected for only them to spend. Defaults to the plugin setting. |
 | Payment terms | Days from an invoice's issue date, or an order's date in order billing, to its due date. Blank uses the plugin's **Default payment terms**, 30 days. See [payment terms](#payment-terms). |
+| Additional billing email | Invoice billing only. Another address for the emails to the account holder. |
+| Send invoices to | Invoice billing only. Which of the holder's email and the additional billing email receive the emails in **Net Terms -> Emails** that go to the account holder. Choose at least one. When you first enter an additional billing email, Net Terms chooses it on save, then shows its checkbox. |
 | Status | **Active**, or **Suspended** to stop buyers checking out on the account. Suspending an account doesn't change its balance. |
 
 ### Over the limit
@@ -50,7 +52,7 @@ A user who holds an account, or who has ledger entries or orders charged to an a
 
 ## Buyers
 
-A buyer is a user who can charge orders to the account. The gateway is available only to buyers. A new account starts with its holder as a buyer. If the holder shouldn't buy, for example when the holder is a company's shared user that nobody signs in as, remove them on the **Buyers** tab.
+A buyer is a user who can charge orders to the account. The gateway is available only to buyers. A new account starts with its holder as a buyer. If the holder shouldn't buy, for example when the holder is a company's shared user that nobody signs in as, remove them on the **Buyers** tab. In invoice billing, to send that account's invoice emails to a real inbox instead of the holder's email, save its **Additional billing email**, then clear **Account holder** under **Send invoices to**.
 
 An order charges its customer's account when the customer holds one. Otherwise it charges the account the signed-in buyer buys on, when they buy on exactly one account in the store. To charge a company's account for orders its people place in some other way, see [company accounts](../dev-guide/company-accounts.md).
 

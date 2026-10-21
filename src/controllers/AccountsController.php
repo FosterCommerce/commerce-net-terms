@@ -130,6 +130,25 @@ class AccountsController extends Controller
 		]);
 		$account->paymentTerms = $paymentTermsDays === false ? null : $paymentTermsDays;
 
+		// Keep the saved address in order billing, where the form doesn't show the field
+		$additionalBillingEmail = $this->request->getBodyParam('additionalBillingEmail', $account->additionalBillingEmail);
+		if ($additionalBillingEmail !== null && ! is_string($additionalBillingEmail)) {
+			throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'error.invalidAdditionalBillingEmail'));
+		}
+
+		$account->additionalBillingEmail = $additionalBillingEmail;
+
+		// Keep the saved choices in order billing, where the form doesn't show them either
+		$invoiceRecipients = $this->request->getBodyParam('invoiceRecipients');
+		if ($invoiceRecipients !== null) {
+			$invoiceRecipients = is_array($invoiceRecipients) ? $invoiceRecipients : [];
+			$account->sendInvoicesToHolder = in_array('holder', $invoiceRecipients, true);
+
+			// Choose a newly entered address, since the form didn't show its checkbox
+			$hasAdditionalBillingEmailChoice = (bool) $this->request->getBodyParam('hasAdditionalBillingEmailChoice');
+			$account->sendInvoicesToAdditionalBillingEmail = ! $hasAdditionalBillingEmailChoice || in_array('additionalBillingEmail', $invoiceRecipients, true);
+		}
+
 		$status = $this->request->getBodyParam('status');
 		$account->status = (is_string($status) ? AccountStatus::tryFrom($status) : null) ?? throw new BadRequestHttpException(Craft::t(Plugin::HANDLE, 'error.invalidStatus'));
 

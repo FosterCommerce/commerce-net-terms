@@ -30,6 +30,7 @@ use craft\commerce\Plugin as Commerce;
 use craft\commerce\records\Transaction as TransactionRecord;
 use craft\elements\User;
 use craft\helpers\Db;
+use craft\helpers\Json;
 use fostercommerce\netterms\db\Table;
 use fostercommerce\netterms\enums\AccountStatus;
 use fostercommerce\netterms\enums\EmailTrigger;
@@ -1294,6 +1295,66 @@ try {
 			$subject = $subjects->getArrayCopy()[0] ?? '';
 
 			return $subject === 'Invoice ' . $reminderInvoice->number . ' is overdue' ? true : $subject;
+		});
+		// To addresses of the overdue email, with the account's additional billing email and choices set
+		$recipientsWithAdditionalBillingEmail = static function (string $additionalBillingEmail, bool $sendInvoicesToHolder = true, bool $sendInvoicesToAdditionalBillingEmail = true) use ($accounts, $emails, $overdueEmail, $reminderInvoice, $reminderAccount): array {
+			$reminderAccount->additionalBillingEmail = $additionalBillingEmail;
+			$reminderAccount->sendInvoicesToHolder = $sendInvoicesToHolder;
+			$reminderAccount->sendInvoicesToAdditionalBillingEmail = $sendInvoicesToAdditionalBillingEmail;
+			if (! $accounts->saveAccount($reminderAccount)) {
+				throw new RuntimeException('Could not save account: ' . Json::encode($reminderAccount->getErrors()));
+			}
+
+			/** @var ArrayObject<int, string[]> $recipientLists */
+			$recipientLists = new ArrayObject();
+			$captureRecipients = static function (yii\mail\MailEvent $mailEvent) use ($recipientLists): void {
+				$recipientLists->append(array_keys((array) $mailEvent->message->getTo()));
+			};
+			Event::on(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $captureRecipients);
+			try {
+				$emails->send($overdueEmail, $reminderInvoice);
+			} finally {
+				Event::off(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $captureRecipients);
+				$reminderAccount->additionalBillingEmail = null;
+				$reminderAccount->sendInvoicesToHolder = true;
+				$reminderAccount->sendInvoicesToAdditionalBillingEmail = true;
+				$accounts->saveAccount($reminderAccount);
+			}
+
+			return $recipientLists->getArrayCopy()[0] ?? [];
+		};
+		check('an email to the holder goes to the holder and the account’s additional billing email', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder, $tag): bool|string {
+			$additionalBillingEmail = $tag . '-billing@net-terms.example';
+			$recipients = $recipientsWithAdditionalBillingEmail($additionalBillingEmail);
+
+			return $recipients === [(string) $reminderHolder->email, $additionalBillingEmail] ? true : Json::encode($recipients);
+		});
+		check('an account that leaves out the holder sends only to its additional billing email', function () use ($recipientsWithAdditionalBillingEmail, $tag): bool|string {
+			$additionalBillingEmail = $tag . '-billing@net-terms.example';
+			$recipients = $recipientsWithAdditionalBillingEmail($additionalBillingEmail, false);
+
+			return $recipients === [$additionalBillingEmail] ? true : Json::encode($recipients);
+		});
+		check('an account that leaves out its additional billing email sends only to the holder', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder, $tag): bool|string {
+			$recipients = $recipientsWithAdditionalBillingEmail($tag . '-billing@net-terms.example', true, false);
+
+			return $recipients === [(string) $reminderHolder->email] ? true : Json::encode($recipients);
+		});
+		check('an additional billing email that differs from the holder’s only in case gets one email', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder): bool|string {
+			$recipients = $recipientsWithAdditionalBillingEmail(strtoupper((string) $reminderHolder->email));
+
+			return $recipients === [(string) $reminderHolder->email] ? true : Json::encode($recipients);
+		});
+		check('an account can’t leave out the holder without an additional billing email', function () use ($accounts, $reminderAccount): bool|string {
+			$reminderAccount->sendInvoicesToHolder = false;
+			try {
+				$saved = $accounts->saveAccount($reminderAccount);
+			} finally {
+				$reminderAccount->sendInvoicesToHolder = true;
+				$reminderAccount->clearErrors();
+			}
+
+			return $saved ? 'saved' : true;
 		});
 
 		$reminderPayment = new Payment([

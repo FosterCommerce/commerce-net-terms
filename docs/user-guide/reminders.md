@@ -67,7 +67,7 @@ Each email has these fields:
 | From Email Address, From Name | Leave blank to use Craft's email settings. These can begin with an environment variable. |
 | Email Subject | Accepts Twig, such as `{{ label }} is due on {{ dateDue }}`. |
 | Reply To | Leave blank to use the **Reply-To Address** in Craft's email settings, or the sender when that is blank. Accepts Twig. |
-| Recipient | **Account holder**, **Buyers on the invoice**, or both. |
+| Recipient | **Account holder**, **Buyers on the invoice**, or both. **Account holder** sends to the addresses set in each account's [Send invoices to](./accounts-and-buyers.md#accounts). |
 | BCC’d Recipient, CC’d Recipient | More addresses, separated by commas. Each can begin with an environment variable, and the field accepts Twig. |
 | Email Body | Markdown. Accepts Twig. On Craft Pro, Net Terms wraps it in the HTML email template set in **Settings -> Email**. If that template fails to render, Net Terms sends the text body alone and logs a warning. |
 | Attach the invoice PDF | Attach the [invoice PDF](./invoices.md#the-invoice-pdf). When the PDF fails to render, Net Terms sends the email without it and logs the error. |

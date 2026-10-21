@@ -22,6 +22,7 @@
 .nt-stat-value {
 	font-size: 18px;
 	font-weight: 600;
+	overflow-wrap: anywhere;
 }
 
 .nt-section {

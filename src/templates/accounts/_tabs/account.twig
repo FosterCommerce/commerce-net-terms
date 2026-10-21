@@ -68,6 +68,32 @@
 		errors: account.getErrors('paymentTerms'),
 	}) }}
 
+	{% if billing.value == 'invoices' %}
+		{{ forms.textField({
+			label: 'account.additionalBillingEmail'|t('net-terms'),
+			instructions: 'account.additionalBillingEmailInstructions'|t('net-terms'),
+			id: 'additionalBillingEmail',
+			name: 'additionalBillingEmail',
+			type: 'email',
+			value: account.additionalBillingEmail,
+			errors: account.getErrors('additionalBillingEmail'),
+		}) }}
+
+		{{ forms.checkboxGroupField({
+			label: 'account.invoiceRecipients'|t('net-terms'),
+			instructions: 'account.invoiceRecipientsInstructions'|t('net-terms'),
+			id: 'invoiceRecipients',
+			name: 'invoiceRecipients',
+			options: [
+				{ label: holder ? 'account.invoiceRecipientHolder'|t('net-terms', { email: holder.email }) : 'account.holder'|t('net-terms'), value: 'holder' },
+				account.additionalBillingEmail ? { label: 'account.invoiceRecipientAdditionalBillingEmail'|t('net-terms', { email: account.additionalBillingEmail }), value: 'additionalBillingEmail' },
+			]|filter,
+			values: [account.sendInvoicesToHolder ? 'holder', account.sendInvoicesToAdditionalBillingEmail ? 'additionalBillingEmail']|filter,
+			errors: account.getErrors('sendInvoicesToHolder'),
+		}) }}
+		{% if account.additionalBillingEmail %}{{ hiddenInput('hasAdditionalBillingEmailChoice', '1') }}{% endif %}
+	{% endif %}
+
 	{{ forms.selectField({
 		label: 'account.status'|t('net-terms'),
 		instructions: 'account.statusInstructions'|t('net-terms'),
