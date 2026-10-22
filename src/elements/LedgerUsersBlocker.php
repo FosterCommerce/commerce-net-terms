@@ -9,7 +9,7 @@ use craft\elements\deletionblockers\BaseDeletionBlocker;
 use fostercommerce\netterms\Plugin;
 
 /**
- * Stops the users index deleting users who hold an account or have ledger history, and says why.
+ * Stops the users index deleting users who have ledger history, and says why.
  */
 class LedgerUsersBlocker extends BaseDeletionBlocker
 {

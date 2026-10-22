@@ -3,7 +3,6 @@
 
 {% set selectedSubnavItem = 'invoices' %}
 {% set account = invoice.getAccount() %}
-{% set holder = account.getHolder() %}
 {% set status = figures.status %}
 
 {% set title = 'invoice.title'|t('net-terms', { number: invoice.number }) %}
@@ -27,8 +26,8 @@
 {% block content %}
 	<div class="nt-stats">
 		<div class="nt-stat">
-			<span class="nt-stat-label">{{ 'account.holder'|t('net-terms') }}</span>
-			<span class="nt-stat-value"><a href="{{ account.cpEditUrl }}">{{ holder.name }}</a></span>
+			<span class="nt-stat-label">{{ 'invoice.account'|t('net-terms') }}</span>
+			<span class="nt-stat-value"><a href="{{ account.cpEditUrl }}">{{ account.title }}</a></span>
 		</div>
 		<div class="nt-stat">
 			<span class="nt-stat-label">{{ 'invoice.status'|t('net-terms') }}</span>

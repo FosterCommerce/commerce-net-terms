@@ -84,7 +84,7 @@ class Emails extends Component
 		$record->trigger = $email->trigger->value;
 		$record->days = $email->getIsReminder() ? $email->days : null;
 		$record->enabled = $email->enabled;
-		$record->sendToHolder = $email->sendToHolder;
+		$record->sendToBillingEmail = $email->sendToBillingEmail;
 		$record->sendToBuyers = $email->sendToBuyers;
 		$record->ccAddresses = $email->ccAddresses;
 		$record->bccAddresses = $email->bccAddresses;
@@ -118,13 +118,12 @@ class Emails extends Component
 	public function send(Email $email, Invoice $invoice): bool
 	{
 		$invoices = Plugin::getInstance()->getInvoices();
-		$holder = $invoice->getAccount()->getHolder();
 		$recipients = $this->getRecipients($email, $invoice);
 
 		/** @var DateTime $dateDue */
 		$dateDue = $invoice->dateDue;
 		$variables = [
-			'recipientName' => $holder?->getName(),
+			'recipientName' => $invoice->getAccount()->title,
 			'label' => Craft::t(Plugin::HANDLE, 'reminder.invoiceLabel', [
 				'number' => $invoice->number,
 			]),
@@ -221,7 +220,7 @@ class Emails extends Component
 			'trigger' => EmailTrigger::from($record->trigger),
 			'days' => $record->days,
 			'enabled' => (bool) $record->enabled,
-			'sendToHolder' => (bool) $record->sendToHolder,
+			'sendToBillingEmail' => (bool) $record->sendToBillingEmail,
 			'sendToBuyers' => (bool) $record->sendToBuyers,
 			'ccAddresses' => $record->ccAddresses,
 			'bccAddresses' => $record->bccAddresses,
@@ -240,20 +239,14 @@ class Emails extends Component
 	private function getRecipients(Email $email, Invoice $invoice): array
 	{
 		$recipients = [];
+		$billingEmail = $invoice->getAccount()->billingEmail;
 
-		if ($email->sendToHolder) {
-			$account = $invoice->getAccount();
-
-			if ($account->sendInvoicesToHolder) {
-				$recipients[] = $account->getHolder()?->email;
-			}
-
-			if ($account->sendInvoicesToAdditionalBillingEmail) {
-				$recipients[] = $account->additionalBillingEmail;
-			}
+		if ($email->sendToBillingEmail && $billingEmail !== null) {
+			$recipients[] = $billingEmail;
 		}
 
-		if ($email->sendToBuyers) {
+		// Email the buyers in place of a billing email the account doesn't have
+		if ($email->sendToBuyers || ($email->sendToBillingEmail && $billingEmail === null)) {
 			foreach ($invoice->getLines() as $line) {
 				$recipients[] = $line->getBuyer()?->getUser()?->email;
 			}

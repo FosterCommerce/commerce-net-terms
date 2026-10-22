@@ -10,7 +10,6 @@ use craft\commerce\base\RequestResponseInterface;
 use craft\commerce\elements\Order;
 use craft\commerce\errors\NotImplementedException;
 use craft\commerce\models\payments\BasePaymentForm;
-use craft\commerce\models\payments\OffsitePaymentForm;
 use craft\commerce\models\PaymentSource;
 use craft\commerce\models\Transaction;
 use craft\commerce\Plugin as Commerce;
@@ -22,8 +21,10 @@ use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Buyer;
+use fostercommerce\netterms\models\payments\NetTermsPaymentForm;
 use fostercommerce\netterms\models\responses\NetTermsResponse;
 use fostercommerce\netterms\Plugin;
+use InvalidArgumentException;
 use Money\Money;
 
 /**
@@ -74,36 +75,40 @@ class NetTerms extends Gateway
 			return;
 		}
 
-		$holderNames = array_map(
-			static fn (Account $account): string => (string) $account->getHolder()?->getName(),
+		$accountTitles = array_map(
+			static fn (Account $account): string => (string) $account->title,
 			Plugin::getInstance()->getAccounts()->getUnsettledAccounts(),
 		);
 
-		if ($holderNames !== []) {
+		if ($accountTitles !== []) {
 			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'gateway.paymentTypeUnsettled', [
-				'accounts' => implode(', ', $holderNames),
+				'accounts' => implode(', ', $accountTitles),
 			]));
 		}
 	}
 
 	/**
-	 * Render a note, the buyer’s available credit and a submit button. Takes the `order`, `submitButtonClasses` and `submitButtonText` params Commerce’s example checkout templates pass.
+	 * Render a note, a choice of the customer’s accounts with their available credit, and a submit button. Takes the `order`, `submitButtonClasses` and `submitButtonText` params Commerce’s example checkout templates pass.
 	 *
 	 * @param array<string, mixed> $params
 	 */
 	public function getPaymentFormHtml(array $params): ?string
 	{
+		$accounts = Plugin::getInstance()->getAccounts();
+
 		// Fall back to the cart on the storefront, since Commerce's example templates pass no order to other gateways
 		$order = $params['order'] ?? (Craft::$app->getRequest()->getIsSiteRequest() ? $this->getCommerce()->getCarts()->getCart() : null);
-		$buyer = $order instanceof Order ? $this->getBuyerForOrder($order) : null;
-		$availableCredit = $buyer instanceof Buyer ? Plugin::getInstance()->getAccounts()->getAvailableCredit($buyer) : null;
-		$outstanding = $buyer instanceof Buyer && $order instanceof Order ? Amounts::toMoney((string) $order->getOutstandingBalance(), $buyer->getAccount()->getCurrency()) : null;
+		$options = $order instanceof Order ? array_map(static fn (Buyer $buyer): array => [
+			'account' => $buyer->getAccount(),
+			'availableCredit' => $accounts->getAvailableCredit($buyer),
+			'canCharge' => $accounts->canCharge($buyer, Amounts::toMoney((string) $order->getOutstandingBalance(), $buyer->getAccount()->getCurrency())),
+		], $accounts->getBuyersForOrder($order)) : [];
 
 		return Craft::$app->getView()->renderTemplate('net-terms/_gateway/payment-form', [
 			'gateway' => $this,
-			'availableCredit' => $availableCredit,
+			'options' => $options,
 			// Without an order the form can't check credit, so show the button and leave the decline to the charge
-			'canCharge' => ! $order instanceof Order || ($buyer instanceof Buyer && $outstanding instanceof Money && Plugin::getInstance()->getAccounts()->canCharge($buyer, $outstanding)),
+			'canCharge' => ! $order instanceof Order || in_array(true, array_column($options, 'canCharge'), true),
 			'submitButtonClasses' => $params['submitButtonClasses'] ?? '',
 			'submitButtonText' => $params['submitButtonText'] ?? Craft::t(Plugin::HANDLE, 'gateway.submitButton'),
 		], View::TEMPLATE_MODE_CP);
@@ -116,7 +121,7 @@ class NetTerms extends Gateway
 
 	public function getPaymentFormModel(): BasePaymentForm
 	{
-		return new OffsitePaymentForm();
+		return new NetTermsPaymentForm();
 	}
 
 	/**
@@ -146,17 +151,17 @@ class NetTerms extends Gateway
 		}
 
 		// Show it to every active buyer, so the form can say why a charge is refused
-		return $this->getBuyerForOrder($order)?->active === true;
+		return Plugin::getInstance()->getAccounts()->getBuyersForOrder($order) !== [];
 	}
 
 	public function purchase(Transaction $transaction, BasePaymentForm $form): RequestResponseInterface
 	{
-		return $this->chargeOrder($transaction);
+		return $this->chargeOrder($transaction, $form);
 	}
 
 	public function authorize(Transaction $transaction, BasePaymentForm $form): RequestResponseInterface
 	{
-		return $this->chargeOrder($transaction);
+		return $this->chargeOrder($transaction, $form);
 	}
 
 	public function refund(Transaction $transaction): RequestResponseInterface
@@ -265,22 +270,41 @@ class NetTerms extends Gateway
 		return false;
 	}
 
-	private function getBuyerForOrder(Order $order): ?Buyer
+	/**
+	 * The customer’s buyer on the account chosen in the payment form, or on their only account when the form has no account ID.
+	 *
+	 * @throws InvalidArgumentException if the form isn't a Net Terms payment form
+	 */
+	private function getChosenBuyer(Order $order, BasePaymentForm $form): ?Buyer
 	{
-		$accounts = Plugin::getInstance()->getAccounts();
-		$account = $accounts->getAccountForOrder($order);
+		if (! $form instanceof NetTermsPaymentForm) {
+			throw new InvalidArgumentException('The Net Terms gateway needs a NetTermsPaymentForm.');
+		}
 
-		return $account instanceof Account ? $accounts->getBuyerForOrder($order, $account) : null;
+		$plugin = Plugin::getInstance();
+		$buyers = $plugin->getAccounts()->getBuyersForOrder($order);
+
+		// Re-approve a linked order on the account it already charges, whatever the form chose
+		$linkedBuyerId = $plugin->getCreditOrders()->getBuyerIdForOrder((int) $order->id);
+		if ($linkedBuyerId !== null) {
+			return array_column($buyers, null, 'id')[$linkedBuyerId] ?? null;
+		}
+
+		if (! is_numeric($form->accountId)) {
+			return count($buyers) === 1 ? $buyers[0] : null;
+		}
+
+		return array_column($buyers, null, 'accountId')[(int) $form->accountId] ?? null;
 	}
 
 	/**
 	 * Charge the order to the buyer’s account, as a purchase or an authorization.
 	 */
-	private function chargeOrder(Transaction $transaction): NetTermsResponse
+	private function chargeOrder(Transaction $transaction, BasePaymentForm $form): NetTermsResponse
 	{
 		$order = $transaction->getOrder();
 		$plugin = Plugin::getInstance();
-		$buyer = $order instanceof Order ? $this->getBuyerForOrder($order) : null;
+		$buyer = $order instanceof Order ? $this->getChosenBuyer($order, $form) : null;
 
 		if (! $order instanceof Order || ! $buyer instanceof Buyer) {
 			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));

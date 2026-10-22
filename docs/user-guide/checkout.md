@@ -6,14 +6,13 @@ What a buyer sees at checkout, what a charge does, and how refunds change the ac
 
 The Net Terms gateway is listed with the store's other payment methods, under the name it has in **Commerce -> Settings -> Gateways**, when all of these are true:
 
-- The order resolves to an account: the customer's own, or the one account the signed-in buyer buys on. A site module can point the order at a different account; see [company accounts](../dev-guide/company-accounts.md).
-- The signed-in user is an active buyer on that account. In the control panel, the gateway is available only when the signed-in staff user is a buyer on the account.
+- The order's customer is an active buyer on an account in the order's store, and on the storefront is signed in. In the control panel, staff charge the customer's accounts, not their own. A site module can charge a different user; see [company accounts](../dev-guide/company-accounts.md).
 - The order isn't already complete. A completed order's balance is paid another way.
 - The gateway's own conditions in **Commerce -> Settings -> Gateways** match the order.
 
-Without an account or an active buyer, the gateway isn't listed, and the customer pays another way.
+Otherwise the gateway isn't listed, and the customer pays another way.
 
-The gateway's payment form shows the buyer's available credit, unless the buyer's credit is unlimited. When the order is more than the buyer's available credit, or the account is suspended, the form says there isn't enough available credit and shows no pay button. If the checkout template doesn't pass the `order` to the payment form, the form uses the current cart. Net Terms doesn't split an order with another payment method.
+The gateway's payment form shows the buyer's available credit, unless the buyer's credit is unlimited. A customer who buys on more than one account chooses one from a list sorted by title, with each account's available credit beside it. The form selects the first account with enough credit. When the order is more than the available credit on every account the customer can choose, or those accounts are suspended, the form says there isn't enough available credit and shows no pay button. If the checkout template doesn't pass the `order` to the payment form, the form uses the current cart. Net Terms doesn't split an order with another payment method.
 
 ## What a charge does
 

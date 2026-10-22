@@ -67,7 +67,7 @@ Each email has these fields:
 | From Email Address, From Name | Leave blank to use Craft's email settings. These can begin with an environment variable. |
 | Email Subject | Accepts Twig, such as `{{ label }} is due on {{ dateDue }}`. |
 | Reply To | Leave blank to use the **Reply-To Address** in Craft's email settings, or the sender when that is blank. Accepts Twig. |
-| Recipient | **Account holder**, **Buyers on the invoice**, or both. **Account holder** sends to the addresses set in each account's [Send invoices to](./accounts-and-buyers.md#accounts). |
+| Recipient | **Billing email**, **Buyers on the invoice**, or both. **Billing email** sends to each account's [Billing email](./accounts-and-buyers.md#accounts), or to the buyers on the invoice when the account has no billing email. |
 | BCC’d Recipient, CC’d Recipient | More addresses, separated by commas. Each can begin with an environment variable, and the field accepts Twig. |
 | Email Body | Markdown. Accepts Twig. On Craft Pro, Net Terms wraps it in the HTML email template set in **Settings -> Email**. If that template fails to render, Net Terms sends the text body alone and logs a warning. |
 | Attach the invoice PDF | Attach the [invoice PDF](./invoices.md#the-invoice-pdf). When the PDF fails to render, Net Terms sends the email without it and logs the error. |
@@ -76,7 +76,7 @@ The subject, body, reply-to, CC and BCC fields receive these variables:
 
 | Variable | Contents |
 |---|---|
-| `recipientName` | The account holder's name. |
+| `recipientName` | The account's title. |
 | `label` | `Invoice` and the invoice number, such as `Invoice INV-001001`. |
 | `amountDue` | The balance, formatted. |
 | `dateDue` | The due date, formatted. |

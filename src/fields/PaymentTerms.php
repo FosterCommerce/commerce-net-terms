@@ -79,9 +79,9 @@ class PaymentTerms extends Field
 
 	protected function inputHtml(mixed $value, ?ElementInterface $element, bool $inline = false): string
 	{
-		// Prefer the account the order is linked to, since the staff member editing it isn't the buyer
+		// Use the customer's first account until the order is linked to one
 		$account = $element instanceof Order
-			? Plugin::getInstance()->getCreditOrders()->getAccountForOrder($element) ?? Plugin::getInstance()->getAccounts()->getAccountForOrder($element)
+			? Plugin::getInstance()->getCreditOrders()->getAccountForOrder($element) ?? (Plugin::getInstance()->getAccounts()->getBuyersForOrder($element)[0] ?? null)?->getAccount()
 			: null;
 
 		return Craft::$app->getView()->renderTemplate('net-terms/_fields/payment-terms', [

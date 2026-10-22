@@ -6,19 +6,24 @@
 	{{ hiddenInput('storeId', account.storeId) }}
 	{% if account.id %}{{ hiddenInput('accountId', account.id) }}{% endif %}
 
-	{% if isNew %}
-		{{ forms.elementSelectField({
-			label: 'account.holder'|t('net-terms'),
-			instructions: 'account.holderInstructions'|t('net-terms'),
-			id: 'holderId',
-			name: 'holderId',
-			elementType: 'craft\\elements\\User',
-			limit: 1,
-			elements: holder ? [holder] : [],
-			required: true,
-			errors: account.getErrors('holderId'),
-		}) }}
-	{% endif %}
+	{{ forms.textField({
+		label: 'Title'|t('app'),
+		id: 'title',
+		name: 'title',
+		value: account.title,
+		autofocus: isNew,
+		required: true,
+		errors: account.getErrors('title'),
+	}) }}
+
+	{{ forms.textareaField({
+		label: 'Description'|t('app'),
+		id: 'description',
+		name: 'description',
+		value: account.description,
+		rows: 2,
+		errors: account.getErrors('description'),
+	}) }}
 
 	{{ forms.lightswitchField({
 		label: 'account.unlimited'|t('net-terms'),
@@ -70,28 +75,14 @@
 
 	{% if billing.value == 'invoices' %}
 		{{ forms.textField({
-			label: 'account.additionalBillingEmail'|t('net-terms'),
-			instructions: 'account.additionalBillingEmailInstructions'|t('net-terms'),
-			id: 'additionalBillingEmail',
-			name: 'additionalBillingEmail',
+			label: 'account.billingEmail'|t('net-terms'),
+			instructions: 'account.billingEmailInstructions'|t('net-terms'),
+			id: 'billingEmail',
+			name: 'billingEmail',
 			type: 'email',
-			value: account.additionalBillingEmail,
-			errors: account.getErrors('additionalBillingEmail'),
+			value: account.billingEmail,
+			errors: account.getErrors('billingEmail'),
 		}) }}
-
-		{{ forms.checkboxGroupField({
-			label: 'account.invoiceRecipients'|t('net-terms'),
-			instructions: 'account.invoiceRecipientsInstructions'|t('net-terms'),
-			id: 'invoiceRecipients',
-			name: 'invoiceRecipients',
-			options: [
-				{ label: holder ? 'account.invoiceRecipientHolder'|t('net-terms', { email: holder.email }) : 'account.holder'|t('net-terms'), value: 'holder' },
-				account.additionalBillingEmail ? { label: 'account.invoiceRecipientAdditionalBillingEmail'|t('net-terms', { email: account.additionalBillingEmail }), value: 'additionalBillingEmail' },
-			]|filter,
-			values: [account.sendInvoicesToHolder ? 'holder', account.sendInvoicesToAdditionalBillingEmail ? 'additionalBillingEmail']|filter,
-			errors: account.getErrors('sendInvoicesToHolder'),
-		}) }}
-		{% if account.additionalBillingEmail %}{{ hiddenInput('hasAdditionalBillingEmailChoice', '1') }}{% endif %}
 	{% endif %}
 
 	{{ forms.selectField({

@@ -15,12 +15,12 @@ class DefineAccountAccessEvent extends Event
 	public User $user;
 
 	/**
-	 * @var bool Whether the user can manage buyers and sublimits on the storefront. Defaults to whether the user is the holder.
+	 * @var bool Whether the user can manage buyers and sublimits on the storefront. Defaults to false.
 	 */
 	public bool $canManage = false;
 
 	/**
-	 * @var bool Whether the user can see the account, its balance and its invoices on the storefront. Defaults to whether the user is the holder or an active buyer. A user who can manage the account can always see it.
+	 * @var bool Whether the user can see the account, its balance and its invoices on the storefront. Defaults to whether the user is an active buyer. A user who can manage the account can always see it.
 	 * @since 2.0.0
 	 */
 	public bool $canView = false;

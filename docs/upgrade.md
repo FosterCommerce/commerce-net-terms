@@ -8,6 +8,14 @@ What to change on a site when updating Net Terms. Run migrations after every upd
 
 ## Upgrading to 2.0.0
 
+### Accounts have a title in place of a holder
+
+Accounts no longer have a holder. The migration titles each account with its holder's full name, or username when that is blank. Buyers don't change, so a holder who wasn't an active buyer can no longer see or charge the account.
+
+- **Which account an order charges:** any account the order's customer is an active buyer on, in the order's store. On the storefront, the customer has to be signed in. In the control panel, staff charge the customer's accounts, not their own. A customer on more than one chooses at checkout. In 1.x, the order charged the customer's held account, or else the one account the signed-in user bought on.
+- **Storefront management:** no one can manage an account's buyers and sublimits from the storefront by default. In 1.x, the holder could. Before updating, note each account's holder (`holderId` in `netterms_accounts`), because the migration removes it. To keep holders managing their accounts, set `canManage` in an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler; see [events](./reference/events.md#accountsevent_define_account_access).
+- **Billing email:** invoice emails and reminders go to each account's **Billing email**, or to the buyers on the invoice when it is blank. In 1.x, they went to the holder. The migration sets each account's billing email to its holder's email address.
+
 ### Adding buyers from the storefront needs a handler
 
 `net-terms/storefront/save-buyer` refuses every user unless an `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` handler sets `isEligible` to `true`. In 1.x, it accepted any user. If your storefront templates let a company's admins add buyers, add a handler before updating; see [events](./reference/events.md#accountsevent_define_buyer_eligibility).
@@ -48,9 +56,17 @@ The settings are in **Net Terms -> Settings**. **Settings -> Plugins -> Net Term
 
 `craft.netTerms.getOwed()` is now `getBalance()`, and `getOwedByBuyer()` is now `getBalanceByBuyer()`. Rename the calls in your templates.
 
+`account.holder` and `account.holderId` are removed. Use `account.title`. `getAccount()` returns the user's first account by title, in place of the first one opened. To list each account, use `getAccounts()`.
+
+`craft.netTerms.getAccountByHolderId()` is removed. Use `getAccounts()` for the accounts the user buys on, or an [Account (Net Terms) field](./dev-guide/company-accounts.md#linking-a-company-to-its-accounts) for an account the user only views.
+
 ### PHP API
 
 - `Reminders::getSystemMessages()` and `ReminderType::messageKey()` are removed.
+- `Accounts::EVENT_RESOLVE_HOLDER`, `ResolveHolderEvent`, `Accounts::getAccountByHolder()` and `Account::getHolder()` are removed. To charge a different user than the order's customer, set `userId` in an `Accounts::EVENT_RESOLVE_BUYER` handler.
+- `ResolveBuyerEvent::$account` is removed, and `$userId` defaults to the order's customer in place of the signed-in user. On the storefront, it defaults to `null` unless the customer is signed in.
+- `Accounts::getAccountForOrder()` and `Accounts::getBuyerForOrder()` are replaced by `Accounts::getBuyersForOrder()`, which returns the customer's buyers on every account the order can charge.
+- `Account::$holderId` is replaced by `$title`, `$description` and `$billingEmail`.
 - `Reminders::sendReminders()` takes the start and end of a window, and sends only the reminders whose moment falls in it.
 - `Accounts::getOwedByAccount()` is now `getBalanceByAccount()`, `Accounts::getOwedByBuyer()` is now `getBalanceByBuyer()`, and `Accounts::getOwedByBuyers()` is now `getBalanceByBuyers()`.
 - `Ledger::getOwedByBuyers()` is now `getBalanceByBuyers()`, and `CreditOrders::getOwedByBuyerId()` is now `getBalanceByBuyerId()`.
@@ -63,4 +79,4 @@ The `account.owed`, `buyer.owes` and `buyer.sublimitBelowOwed` keys are now `acc
 
 The `email.invoiceSubject`, `email.invoiceHeading`, `email.viewAndPay`, `reminder.orderLabel`, and due-soon and overdue `reminder.*` keys are removed. Move translated wording into the emails in **Net Terms -> Emails**, and for order-billing reminders into the Commerce email each one sends.
 
-The `invoice.issueAndSend` and `invoice.issueConfirm` keys, `settings.remindersInstructions`, and the `settings.*` keys of the removed **Due-soon reminder**, **Overdue reminder**, **Invoice email template** and **Storefront order path** settings are also removed.
+The `account.holder*` keys, the `invoice.issueAndSend` and `invoice.issueConfirm` keys, `settings.remindersInstructions`, and the `settings.*` keys of the removed **Due-soon reminder**, **Overdue reminder**, **Invoice email template** and **Storefront order path** settings are also removed.

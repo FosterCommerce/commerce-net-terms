@@ -7,7 +7,6 @@ namespace fostercommerce\netterms\controllers;
 use Craft;
 use craft\commerce\errors\TransactionException;
 use craft\commerce\Plugin as Commerce;
-use craft\elements\User;
 use craft\helpers\DateTimeHelper;
 use craft\web\Controller;
 use craft\web\twig\variables\Paginate;
@@ -79,10 +78,8 @@ class PaymentsController extends Controller
 
 		$accountOptions = [];
 		foreach (Plugin::getInstance()->getAccounts()->getAllAccounts() as $account) {
-			/** @var User $holder */
-			$holder = $account->getHolder();
 			$accountOptions[] = [
-				'label' => $holder->getName(),
+				'label' => $account->title,
 				'value' => $account->id,
 			];
 		}

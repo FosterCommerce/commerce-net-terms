@@ -15,7 +15,7 @@ use fostercommerce\netterms\db\Table;
  * @property string $trigger
  * @property int|null $days
  * @property bool $enabled
- * @property bool $sendToHolder
+ * @property bool $sendToBillingEmail
  * @property bool $sendToBuyers
  * @property string|null $ccAddresses
  * @property string|null $bccAddresses

@@ -141,7 +141,7 @@ class InvoicesController extends Controller
 				if ($billable->isPositive() || $candidate->id === $account?->id) {
 					$accountOptions[] = [
 						'label' => Craft::t(Plugin::HANDLE, 'invoice.accountOption', [
-							'name' => $candidate->getHolder()?->getName(),
+							'name' => $candidate->title,
 							'amount' => Amounts::toString($billable),
 						]),
 						'value' => $candidate->id,

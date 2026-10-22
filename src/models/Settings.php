@@ -81,14 +81,14 @@ class Settings extends Model
 			return;
 		}
 
-		$holderNames = array_map(
-			static fn (Account $account): string => (string) $account->getHolder()?->getName(),
+		$accountTitles = array_map(
+			static fn (Account $account): string => (string) $account->title,
 			Plugin::getInstance()->getAccounts()->getDefaultModeAccountsOverReserved(),
 		);
 
-		if ($holderNames !== []) {
+		if ($accountTitles !== []) {
 			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'settings.defaultReservedOverLimit', [
-				'accounts' => implode(', ', $holderNames),
+				'accounts' => implode(', ', $accountTitles),
 			]));
 		}
 	}

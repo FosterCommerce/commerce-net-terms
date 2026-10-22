@@ -8,7 +8,6 @@ use Craft;
 use craft\base\Model;
 use craft\commerce\models\Store;
 use craft\commerce\Plugin as Commerce;
-use craft\elements\User;
 use craft\helpers\App;
 use craft\helpers\UrlHelper;
 use DateTime;
@@ -21,7 +20,7 @@ use Money\Money;
 use yii\base\InvalidConfigException;
 
 /**
- * A customer’s account in one store.
+ * A store’s central holding for the terms billing on orders charged to it.
  */
 class Account extends Model
 {
@@ -29,7 +28,9 @@ class Account extends Model
 
 	public ?int $storeId = null;
 
-	public ?int $holderId = null;
+	public ?string $title = null;
+
+	public ?string $description = null;
 
 	/**
 	 * Null when the account has unlimited credit.
@@ -49,16 +50,9 @@ class Account extends Model
 	public ?int $paymentTerms = null;
 
 	/**
-	 * Null for no additional address.
+	 * Null sends account emails to the invoice’s buyers.
 	 */
-	public ?string $additionalBillingEmail = null;
-
-	public bool $sendInvoicesToHolder = true;
-
-	/**
-	 * Ignored while the account has no additional billing email.
-	 */
-	public bool $sendInvoicesToAdditionalBillingEmail = true;
+	public ?string $billingEmail = null;
 
 	public AccountStatus $status = AccountStatus::Active;
 
@@ -94,11 +88,6 @@ class Account extends Model
 		}
 
 		return $currency;
-	}
-
-	public function getHolder(): ?User
-	{
-		return $this->holderId !== null ? Craft::$app->getUsers()->getUserById($this->holderId) : null;
 	}
 
 	public function getEffectiveSublimitMode(): SublimitMode
@@ -144,39 +133,34 @@ class Account extends Model
 		}
 	}
 
-	public function validateInvoiceRecipients(string $attribute): void
-	{
-		$sendsToAdditionalBillingEmail = $this->sendInvoicesToAdditionalBillingEmail && $this->additionalBillingEmail !== null;
-
-		if (! $this->sendInvoicesToHolder && ! $sendsToAdditionalBillingEmail) {
-			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'account.invoiceRecipientsRequired'));
-		}
-	}
-
 	/**
 	 * @return array<int, mixed>
 	 */
 	protected function defineRules(): array
 	{
 		return [
-			[['storeId', 'holderId'], 'required'],
+			[['title', 'description'], 'trim'],
+			[['description'], 'default'],
+			[['storeId', 'title'], 'required'],
+			[['title'],
+				'string',
+				'max' => 255],
 			[['creditLimit'],
 				'required',
 				'when' => fn (): bool => ! $this->unlimited],
 			[['paymentTerms'],
 				'integer',
 				'min' => 0],
-			[['additionalBillingEmail'], 'trim'],
-			[['additionalBillingEmail'], 'default'],
-			[['additionalBillingEmail'],
+			[['billingEmail'], 'trim'],
+			[['billingEmail'], 'default'],
+			[['billingEmail'],
 				'email',
 				'enableIDN' => App::supportsIdn(),
 				'enableLocalIDN' => App::supportsIdn()],
-			[['additionalBillingEmail'],
+			[['billingEmail'],
 				'string',
 				'max' => 255],
 			[['creditLimit'], 'validateCreditLimit'],
-			[['sendInvoicesToHolder'], 'validateInvoiceRecipients'],
 		];
 	}
 }

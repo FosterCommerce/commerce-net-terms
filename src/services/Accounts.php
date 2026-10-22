@@ -18,9 +18,7 @@ use fostercommerce\netterms\enums\SublimitMode;
 use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\events\DefineAccountAccessEvent;
 use fostercommerce\netterms\events\DefineBuyerEligibilityEvent;
-use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
 use fostercommerce\netterms\events\ResolveBuyerEvent;
-use fostercommerce\netterms\events\ResolveHolderEvent;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Buyer;
@@ -38,23 +36,7 @@ use yii\base\InvalidConfigException;
 class Accounts extends Component
 {
 	/**
-	 * The event that is triggered when resolving which user’s account an order charges.
-	 *
-	 * ```php
-	 * use fostercommerce\netterms\events\ResolveHolderEvent;
-	 * use fostercommerce\netterms\services\Accounts;
-	 * use yii\base\Event;
-	 *
-	 * Event::on(Accounts::class, Accounts::EVENT_RESOLVE_HOLDER, function(ResolveHolderEvent $event) {
-	 *     // Charge the company the customer buys for, rather than the customer
-	 *     $event->holderId = MyCompanies::companyUserIdFor($event->order);
-	 * });
-	 * ```
-	 */
-	public const EVENT_RESOLVE_HOLDER = 'resolveHolder';
-
-	/**
-	 * The event that is triggered when resolving which buyer is charging an order.
+	 * The event that is triggered when resolving which user is charging an order.
 	 *
 	 * ```php
 	 * use fostercommerce\netterms\events\ResolveBuyerEvent;
@@ -62,8 +44,10 @@ class Accounts extends Component
 	 * use yii\base\Event;
 	 *
 	 * Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, function(ResolveBuyerEvent $event) {
-	 *     // Charge the person who placed the order rather than whoever is paying for it
-	 *     $event->userId = MyOrders::placedByUserId($event->order);
+	 *     // Refuse Net Terms for guests and personal orders
+	 *     if ($event->userId !== null) {
+	 *         $event->userId = MyCompanies::companyForOrder($event->order)?->accountUserId;
+	 *     }
 	 * });
 	 * ```
 	 */
@@ -79,9 +63,9 @@ class Accounts extends Component
 	 *
 	 * Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, function(DefineAccountAccessEvent $event) {
 	 *     // Let the company’s admins manage its account
-	 *     $event->canManage = MyCompanies::isAdmin($event->user, $event->account->holderId);
+	 *     $event->canManage = MyCompanies::isAdmin($event->user, $event->account->id);
 	 *     // Let other company members see it without buying on it
-	 *     $event->canView = MyCompanies::isMember($event->user, $event->account->holderId);
+	 *     $event->canView = MyCompanies::isMember($event->user, $event->account->id);
 	 * });
 	 * ```
 	 */
@@ -97,27 +81,11 @@ class Accounts extends Component
 	 *
 	 * Event::on(Accounts::class, Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY, function(DefineBuyerEligibilityEvent $event) {
 	 *     // Only the company's own people can buy on its account
-	 *     $event->isEligible = MyCompanies::isMember($event->user, $event->account->holderId);
+	 *     $event->isEligible = MyCompanies::isMember($event->user, $event->account->id);
 	 * });
 	 * ```
 	 */
 	public const EVENT_DEFINE_BUYER_ELIGIBILITY = 'defineBuyerEligibility';
-
-	/**
-	 * The event that is triggered when an account is created, to decide whether the user can hold one.
-	 *
-	 * ```php
-	 * use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
-	 * use fostercommerce\netterms\services\Accounts;
-	 * use yii\base\Event;
-	 *
-	 * Event::on(Accounts::class, Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY, function(DefineHolderEligibilityEvent $event) {
-	 *     // Only companies hold accounts
-	 *     $event->isEligible = MyCompanies::isCompanyUser($event->user);
-	 * });
-	 * ```
-	 */
-	public const EVENT_DEFINE_HOLDER_ELIGIBILITY = 'defineHolderEligibility';
 
 	/**
 	 * @var array<int, Account|null>
@@ -158,16 +126,6 @@ class Accounts extends Component
 		return $account->getCurrency();
 	}
 
-	public function getAccountByHolder(int $storeId, int $holderId): ?Account
-	{
-		$record = AccountRecord::findOne([
-			'storeId' => $storeId,
-			'holderId' => $holderId,
-		]);
-
-		return $record instanceof AccountRecord ? $this->createAccountFromRecord($record) : null;
-	}
-
 	/**
 	 * @return Account[]
 	 */
@@ -175,6 +133,7 @@ class Accounts extends Component
 	{
 		/** @var AccountRecord[] $records */
 		$records = AccountRecord::find()->orderBy([
+			'title' => SORT_ASC,
 			'id' => SORT_ASC,
 		])->all();
 
@@ -273,7 +232,7 @@ class Accounts extends Component
 	}
 
 	/**
-	 * The accounts a user is an active buyer on, across stores.
+	 * The accounts a user is an active buyer on, across stores, by title.
 	 *
 	 * @return Account[]
 	 */
@@ -291,6 +250,7 @@ class Accounts extends Component
 					]),
 			])
 			->orderBy([
+				'title' => SORT_ASC,
 				'id' => SORT_ASC,
 			])
 			->all();
@@ -334,41 +294,44 @@ class Accounts extends Component
 	}
 
 	/**
-	 * The account an order charges, if the order resolves to one.
+	 * The paying user’s active buyers on accounts in the order’s store, by account title.
+	 *
+	 * @return Buyer[]
 	 */
-	public function getAccountForOrder(Order $order): ?Account
+	public function getBuyersForOrder(Order $order): array
 	{
-		$storeId = (int) $order->getStore()->id;
-		$event = new ResolveHolderEvent([
-			'order' => $order,
-			'holderId' => $this->getDefaultHolderId($order, $storeId),
-		]);
-		$this->trigger(self::EVENT_RESOLVE_HOLDER, $event);
+		// Charge a storefront order only to the signed-in customer, since a guest can enter any customer's email
+		$customerId = $order->getCustomerId();
+		$isCustomerPaying = ! Craft::$app->getRequest()->getIsSiteRequest() || Craft::$app->getUser()->getId() === $customerId;
 
-		if ($event->holderId === null) {
-			return null;
-		}
-
-		return $this->getAccountByHolder($storeId, $event->holderId);
-	}
-
-	/**
-	 * The buyer charging an order to an account, if the paying user is one.
-	 */
-	public function getBuyerForOrder(Order $order, Account $account): ?Buyer
-	{
 		$event = new ResolveBuyerEvent([
 			'order' => $order,
-			'account' => $account,
-			'userId' => Craft::$app->getUser()->getIdentity()?->id,
+			'userId' => $isCustomerPaying ? $customerId : null,
 		]);
 		$this->trigger(self::EVENT_RESOLVE_BUYER, $event);
 
 		if ($event->userId === null) {
-			return null;
+			return [];
 		}
 
-		return $this->getBuyer($account, $event->userId);
+		/** @var BuyerRecord[] $records */
+		$records = BuyerRecord::find()
+			->alias('buyers')
+			->innerJoin([
+				'accounts' => Table::ACCOUNTS,
+			], '[[accounts.id]] = [[buyers.accountId]]')
+			->where([
+				'buyers.userId' => $event->userId,
+				'buyers.active' => true,
+				'accounts.storeId' => $order->getStore()->id,
+			])
+			->orderBy([
+				'accounts.title' => SORT_ASC,
+				'accounts.id' => SORT_ASC,
+			])
+			->all();
+
+		return array_map($this->createBuyerFromRecord(...), $records);
 	}
 
 	/**
@@ -475,16 +438,10 @@ class Accounts extends Component
 	}
 
 	/**
-	 * Whether the user holds an account or has ledger history as a buyer, which keeps the user from being deleted.
+	 * Whether the user has ledger history as a buyer, which keeps the user from being deleted.
 	 */
 	public function hasLedgerHistory(int $userId): bool
 	{
-		$holdsAccount = AccountRecord::find()
-			->where([
-				'holderId' => $userId,
-			])
-			->exists();
-
 		$buyerIds = array_map(intval(...), (new Query())
 			->select(['id'])
 			->from(Table::BUYERS)
@@ -492,11 +449,11 @@ class Accounts extends Component
 				'userId' => $userId,
 			])
 			->column());
-		return $holdsAccount || $this->hasBuyerHistory($buyerIds);
+		return $this->hasBuyerHistory($buyerIds);
 	}
 
 	/**
-	 * Save an account, enforcing the sublimit rules for its mode. A new account gets its holder as a buyer.
+	 * Save an account, enforcing the sublimit rules for its mode.
 	 *
 	 * @throws LedgerException if the account is locked by another request
 	 */
@@ -507,7 +464,13 @@ class Accounts extends Component
 		}
 
 		if ($account->id === null) {
-			return $this->insertAccount($account);
+			$record = new AccountRecord();
+			$record->storeId = (int) $account->storeId;
+			$this->populateAccountRecord($record, $account);
+			$record->save(false);
+			$account->id = $record->id;
+
+			return true;
 		}
 
 		return Plugin::getInstance()->getLedger()->withAccountLock($account->id, function () use ($account): bool {
@@ -664,19 +627,6 @@ class Accounts extends Component
 	}
 
 	/**
-	 * Whether the user can hold a new account.
-	 */
-	public function canBeHolder(User $user): bool
-	{
-		$event = new DefineHolderEligibilityEvent([
-			'user' => $user,
-		]);
-		$this->trigger(self::EVENT_DEFINE_HOLDER_ELIGIBILITY, $event);
-
-		return $event->isEligible;
-	}
-
-	/**
 	 * Whether the storefront can add the user as a buyer on the account.
 	 */
 	public function canBeBuyer(Account $account, User $user): bool
@@ -695,12 +645,11 @@ class Accounts extends Component
 		$account = new Account([
 			'id' => $record->id,
 			'storeId' => $record->storeId,
-			'holderId' => $record->holderId,
+			'title' => $record->title,
+			'description' => $record->description,
 			'sublimitMode' => $record->sublimitMode !== null ? SublimitMode::from($record->sublimitMode) : null,
 			'paymentTerms' => $record->paymentTerms,
-			'additionalBillingEmail' => $record->additionalBillingEmail,
-			'sendInvoicesToHolder' => (bool) $record->sendInvoicesToHolder,
-			'sendInvoicesToAdditionalBillingEmail' => (bool) $record->sendInvoicesToAdditionalBillingEmail,
+			'billingEmail' => $record->billingEmail,
 			'status' => AccountStatus::from($record->status),
 			'dateCreated' => DateTimeHelper::toDateTime($record->dateCreated) ?: null,
 			'dateUpdated' => DateTimeHelper::toDateTime($record->dateUpdated) ?: null,
@@ -713,12 +662,10 @@ class Accounts extends Component
 
 	private function defineAccess(Account $account, User $user): DefineAccountAccessEvent
 	{
-		$isHolder = $account->holderId === $user->id;
 		$event = new DefineAccountAccessEvent([
 			'account' => $account,
 			'user' => $user,
-			'canManage' => $isHolder,
-			'canView' => $isHolder || $this->getBuyer($account, (int) $user->id)?->active === true,
+			'canView' => $this->getBuyer($account, (int) $user->id)?->active === true,
 		]);
 		$this->trigger(self::EVENT_DEFINE_ACCOUNT_ACCESS, $event);
 
@@ -738,53 +685,17 @@ class Accounts extends Component
 		]);
 	}
 
-	private function insertAccount(Account $account): bool
-	{
-		$existing = $this->getAccountByHolder((int) $account->storeId, (int) $account->holderId);
-		if ($existing instanceof Account) {
-			$account->addError('holderId', Craft::t(Plugin::HANDLE, 'account.holderHasAccount'));
-
-			return false;
-		}
-
-		$holder = $account->getHolder();
-		if ($holder instanceof User && ! $this->canBeHolder($holder)) {
-			$account->addError('holderId', Craft::t(Plugin::HANDLE, 'account.holderNotEligible'));
-
-			return false;
-		}
-
-		Craft::$app->getDb()->transaction(function () use ($account): void {
-			$record = new AccountRecord();
-			$record->storeId = (int) $account->storeId;
-			$record->holderId = (int) $account->holderId;
-			$this->populateAccountRecord($record, $account);
-			$record->save(false);
-			$account->id = $record->id;
-
-			// Give the holder a buyer row, since every charge needs one
-			$holderBuyerRecord = new BuyerRecord();
-			$holderBuyerRecord->accountId = $record->id;
-			$holderBuyerRecord->userId = $record->holderId;
-			$holderBuyerRecord->sublimit = null;
-			$holderBuyerRecord->active = true;
-			$holderBuyerRecord->save(false);
-		});
-
-		return true;
-	}
-
 	/**
-	 * Copy the editable attributes. The store and holder are set once, on insert.
+	 * Copy the editable attributes. The store is set once, on insert.
 	 */
 	private function populateAccountRecord(AccountRecord $record, Account $account): void
 	{
 		$record->creditLimit = $account->unlimited || ! $account->creditLimit instanceof Money ? null : Amounts::toDecimal($account->creditLimit);
 		$record->sublimitMode = $account->sublimitMode?->value;
 		$record->paymentTerms = $account->paymentTerms;
-		$record->additionalBillingEmail = $account->additionalBillingEmail;
-		$record->sendInvoicesToHolder = $account->sendInvoicesToHolder;
-		$record->sendInvoicesToAdditionalBillingEmail = $account->sendInvoicesToAdditionalBillingEmail;
+		$record->title = (string) $account->title;
+		$record->description = $account->description;
+		$record->billingEmail = $account->billingEmail;
 		$record->status = $account->status->value;
 	}
 
@@ -840,27 +751,6 @@ class Accounts extends Component
 		}
 
 		return $room;
-	}
-
-	/**
-	 * The order’s customer when they hold an account, otherwise the holder of the one account the signed-in user buys on in the store.
-	 */
-	private function getDefaultHolderId(Order $order, int $storeId): ?int
-	{
-		$customerId = $order->getCustomerId();
-
-		if ($customerId !== null && $this->getAccountByHolder($storeId, $customerId) instanceof Account) {
-			return $customerId;
-		}
-
-		$currentUserId = Craft::$app->getUser()->getIdentity()?->id;
-		$buyerAccounts = $currentUserId !== null ? array_values(array_filter(
-			$this->getAccountsByBuyerUserId($currentUserId),
-			static fn (Account $account): bool => $account->storeId === $storeId,
-		)) : [];
-
-		// Fall back to the customer for a buyer on several accounts, since the order doesn't say which one
-		return count($buyerAccounts) === 1 ? $buyerAccounts[0]->holderId : $customerId;
 	}
 
 	/**

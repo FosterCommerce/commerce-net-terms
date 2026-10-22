@@ -1,5 +1,4 @@
 {# Plain invoice PDF. To brand it, copy it into your site and set its path in Template under Invoice PDF in Net Terms → Settings. #}
-{% set holder = account.getHolder() %}
 <!DOCTYPE html>
 <html lang="{{ craft.app.language }}">
 <head>
@@ -17,7 +16,7 @@
 </head>
 <body>
 	<h1>{{ 'reminder.invoiceLabel'|t('net-terms', { number: invoice.number }) }}</h1>
-	<p class="muted">{{ holder ? holder.name }}</p>
+	<p class="muted">{{ account.title }}</p>
 
 	<table>
 		<tr><td class="muted">{{ 'invoice.dateIssued'|t('net-terms') }}</td><td class="amount">{{ invoice.dateIssued|date('long') }}</td></tr>

@@ -26,40 +26,31 @@ use Money\Money;
 class NetTermsVariable
 {
 	/**
-	 * The account the current user holds or buys on, in the current store, when they can see it.
+	 * The first of `getAccounts()`.
 	 */
 	public function getAccount(): ?Account
 	{
-		$currentUser = $this->getCurrentUser();
-		if (! $currentUser instanceof User) {
-			return null;
-		}
-
-		$accounts = Plugin::getInstance()->getAccounts();
-		$storeId = $this->getCurrentStoreId();
-		$heldAccount = $accounts->getAccountByHolder($storeId, (int) $currentUser->id);
-
-		if ($heldAccount instanceof Account && $this->canView($heldAccount)) {
-			return $heldAccount;
-		}
-
-		foreach ($accounts->getAccountsByBuyerUserId((int) $currentUser->id) as $account) {
-			if ($account->storeId === $storeId && $this->canView($account)) {
-				return $account;
-			}
-		}
-
-		return null;
+		return $this->getAccounts()[0] ?? null;
 	}
 
 	/**
-	 * The account a holder’s user ID has, when the current user can see it.
+	 * The accounts the current user buys on in the current store and can see.
+	 *
+	 * @return Account[]
 	 */
-	public function getAccountByHolderId(int $holderId): ?Account
+	public function getAccounts(): array
 	{
-		$account = Plugin::getInstance()->getAccounts()->getAccountByHolder($this->getCurrentStoreId(), $holderId);
+		$currentUser = $this->getCurrentUser();
+		if (! $currentUser instanceof User) {
+			return [];
+		}
 
-		return $account instanceof Account && $this->canView($account) ? $account : null;
+		$storeId = $this->getCurrentStoreId();
+
+		return array_values(array_filter(
+			Plugin::getInstance()->getAccounts()->getAccountsByBuyerUserId((int) $currentUser->id),
+			fn (Account $account): bool => $account->storeId === $storeId && $this->canView($account),
+		));
 	}
 
 	/**
@@ -223,7 +214,7 @@ class NetTermsVariable
 	}
 
 	/**
-	 * The holder, an active buyer, or anyone who can manage the account can see it, unless an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler changes who can.
+	 * An active buyer, or anyone who can manage the account, can see it, unless an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler changes who can.
 	 */
 	private function canView(Account $account): bool
 	{

@@ -2,9 +2,9 @@
 
 Show a customer their account and its balance, let the people who manage it set sublimits, and in order billing take payment of an order's balance. The plugin does not ship storefront pages. You build them with `craft.netTerms` and the plugin's storefront actions.
 
-`craft.netTerms` returns only accounts the signed-in user can see: the holder's, one they are an active buyer on, one they can manage, or one an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler lets them see. To change who can see or manage an account, see [company accounts](./company-accounts.md).
+`craft.netTerms` returns figures only for accounts the signed-in user can see: one they are an active buyer on, one they can manage, or one an `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler lets them see. To change who can see or manage an account, see [company accounts](./company-accounts.md).
 
-`getAccount()` returns only the account the user holds or buys on. For a user who can see or manage an account without buying on it, fetch the account with `getAccountByHolderId(holderId)`.
+`getAccounts()` returns only the accounts the user buys on. For a user who can see or manage an account without buying on it, get the account from the company's [Account (Net Terms) field](./company-accounts.md#linking-a-company-to-its-accounts).
 
 ## Example
 
@@ -34,6 +34,10 @@ Show a customer their account and its balance, let the people who manage it set 
 ```
 
 Amounts are [Money](https://www.moneyphp.org/) objects. Format them with Craft's `|money` filter.
+
+## Charging an order
+
+The gateway's payment form lets a customer on more than one account choose one. To build your own payment form, post the chosen account's ID as `accountId` inside `{% namespace gateway.handle|commercePaymentFormNamespace %}`. A customer on one account can leave it out.
 
 ## Managing buyers
 
@@ -109,8 +113,8 @@ To link order reminders to this page, link to it from the reminder's Commerce em
 
 | Method | Returns |
 |---|---|
-| `getAccount()` | The account the user holds or buys on in the current store. For a buyer on more than one account, the first one opened. |
-| `getAccountByHolderId(holderId)` | The account a holder's user ID has, when the user can see it. |
+| `getAccounts()` | The accounts the user buys on in the current store and can see, by title. |
+| `getAccount()` | The first of `getAccounts()`. |
 | `getCurrentBuyer(account)` | The user's buyer record on the account. |
 | `getBuyers(account)` | Every buyer on the account, including deactivated ones. Check `buyer.active`. |
 | `getAvailableCredit(buyer)` | What the buyer can still charge, or `null` when it is unlimited. |

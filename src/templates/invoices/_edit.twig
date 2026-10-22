@@ -57,7 +57,7 @@
 			label: 'invoice.account'|t('net-terms'),
 			errors: invoice.getErrors('accountId'),
 		} %}
-			{% block input %}<p><a href="{{ account.cpEditUrl }}">{{ account.getHolder().name }}</a></p>{% endblock %}
+			{% block input %}<p><a href="{{ account.cpEditUrl }}">{{ account.title }}</a></p>{% endblock %}
 		{% endembed %}
 	{% endif %}
 

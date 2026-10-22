@@ -5,7 +5,7 @@
 	<thead>
 		<tr>
 			<th>{{ 'invoice.number'|t('net-terms') }}</th>
-			{% if showAccount %}<th>{{ 'account.holder'|t('net-terms') }}</th>{% endif %}
+			{% if showAccount %}<th>{{ 'invoice.account'|t('net-terms') }}</th>{% endif %}
 			<th>{{ 'invoice.status'|t('net-terms') }}</th>
 			<th>{{ 'invoice.dateIssued'|t('net-terms') }}</th>
 			<th>{{ 'invoice.dateDue'|t('net-terms') }}</th>
@@ -21,8 +21,7 @@
 				<th scope="row"><a href="{{ invoice.cpEditUrl }}">{{ invoice.number }}</a></th>
 				{% if showAccount %}
 					{% set invoiceAccount = invoice.getAccount() %}
-					{% set invoiceHolder = invoiceAccount.getHolder() %}
-					<td><a href="{{ invoiceAccount.cpEditUrl }}">{{ invoiceHolder.name }}</a></td>
+					<td><a href="{{ invoiceAccount.cpEditUrl }}">{{ invoiceAccount.title }}</a></td>
 				{% endif %}
 				<td>
 					<span class="status {{ status.color() }}"></span>{{ status.label() }}

@@ -16,7 +16,7 @@
 		<table class="data fullwidth collapsible">
 			<thead>
 				<tr>
-					<th>{{ 'account.holder'|t('net-terms') }}</th>
+					<th>{{ 'Title'|t('app') }}</th>
 					<th>{{ 'account.status'|t('net-terms') }}</th>
 					<th class="nt-amount">{{ 'account.creditLimit'|t('net-terms') }}</th>
 					<th class="nt-amount">{{ 'account.balance'|t('net-terms') }}</th>
@@ -26,12 +26,11 @@
 			</thead>
 			<tbody>
 				{% for account in accounts %}
-					{% set holder = account.getHolder() %}
 					{% set figures = netTerms.accounts.getAccountFigures(account) %}
 					<tr>
 						<th scope="row">
-							<a href="{{ account.cpEditUrl }}">{{ holder.name }}</a>
-							<div class="light smalltext">{{ holder.email }}</div>
+							<a href="{{ account.cpEditUrl }}">{{ account.title }}</a>
+							{% if account.description %}<div class="light smalltext">{{ account.description }}</div>{% endif %}
 						</th>
 						<td>
 							<span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}

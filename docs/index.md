@@ -19,7 +19,7 @@ Net Terms is a Craft Commerce payment gateway that bills orders on net terms, tr
 **Dev guide:**
 
 - [Storefront templates](./dev-guide/storefront-templates.md), showing an account and managing buyers
-- [Company accounts](./dev-guide/company-accounts.md), charging a company's account when a person places the order
+- [Company accounts](./dev-guide/company-accounts.md), linking a company's entries to its accounts and syncing its buyers
 
 **Reference:**
 

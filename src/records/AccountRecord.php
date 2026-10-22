@@ -12,13 +12,12 @@ use fostercommerce\netterms\db\Table;
  *
  * @property int $id
  * @property int $storeId
- * @property int $holderId
+ * @property string $title
+ * @property string|null $description
  * @property string|null $creditLimit
  * @property string|null $sublimitMode
  * @property int|null $paymentTerms
- * @property string|null $additionalBillingEmail
- * @property bool $sendInvoicesToHolder
- * @property bool $sendInvoicesToAdditionalBillingEmail
+ * @property string|null $billingEmail
  * @property string $status
  * @property string $dateCreated
  * @property string $dateUpdated

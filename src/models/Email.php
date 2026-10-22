@@ -24,7 +24,7 @@ class Email extends Model
 
 	public bool $enabled = true;
 
-	public bool $sendToHolder = true;
+	public bool $sendToBillingEmail = true;
 
 	public bool $sendToBuyers = false;
 
@@ -64,7 +64,7 @@ class Email extends Model
 
 	public function validateRecipients(string $attribute): void
 	{
-		if (! $this->sendToHolder && ! $this->sendToBuyers) {
+		if (! $this->sendToBillingEmail && ! $this->sendToBuyers) {
 			$this->addError($attribute, Craft::t(Plugin::HANDLE, 'email.recipientsRequired'));
 		}
 	}
@@ -82,7 +82,7 @@ class Email extends Model
 			[['days'],
 				'validateDays',
 				'skipOnEmpty' => false],
-			[['sendToHolder'],
+			[['sendToBillingEmail'],
 				'validateRecipients',
 				'skipOnEmpty' => false],
 		];

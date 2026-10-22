@@ -9,8 +9,10 @@
 - Added the ability to choose the Commerce email each order-billing reminder sends.
 - Added invoice PDFs, their settings, and `craft.netTerms.getInvoicePdfUrl()`.
 - Added draft invoices, invoice notes, and the ability to choose an invoice’s due date.
-- Added the “Additional billing email” and “Send invoices to” account settings.
-- Added `Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY`, `Accounts::canView()` and `DefineAccountAccessEvent::$canView`.
+- Added the “Description” and “Billing email” account settings.
+- Added the “Account (Net Terms)” field type, which links an element such as a company entry to an account. In GraphQL, it returns the account’s ID.
+- Added the ability for a buyer on more than one account to choose the account in the payment form. The gateway’s payment form model is now `fostercommerce\netterms\models\payments\NetTermsPaymentForm`.
+- Added `craft.netTerms.getAccounts()`, `Accounts::getBuyersForOrder()`, `Accounts::canView()` and `DefineAccountAccessEvent::$canView`.
 
 ### Changed
 - Invoices are now issued from a “New invoice” page, and `net-terms/invoices/issue` skips accounts with a draft.
@@ -20,10 +22,15 @@
 - Lowering a completed order’s total now takes the change off its invoice line when the line’s balance covers it.
 - The `net-terms/storefront/save-buyer` action now refuses to add a buyer unless an `Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY` handler allows the user.
 - Renamed every `getOwed…()` method to `getBalance…()`, in `craft.netTerms`, `Accounts`, `Ledger` and `CreditOrders`, and `Accounts::getAccountFigures()` now returns the account’s balance under `balance` instead of `owed`. The upgrade guide lists each one.
-- `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` now also fires when a holder or active buyer views an account.
+- `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` now also fires when `craft.netTerms` checks whether a user can see an account.
+- Accounts now have a title in place of a holder user.
+- An order can now charge any account its customer is an active buyer on, including an order placed in the control panel, and `ResolveBuyerEvent::$userId` defaults to the order’s customer. On the storefront, the customer has to be signed in.
+- No one can manage an account from the storefront by default. An `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler can allow it.
+- Invoice emails and invoice-billing reminders now go to the account’s billing email, or to the invoice’s buyers when it has no billing email, instead of the account holder.
 
 ### Removed
 - Removed the `dueSoonReminderDays`, `overdueReminderDays`, “Invoice email template” and “Storefront order path” settings, the due-soon and overdue system messages, and `Reminders::getSystemMessages()`.
+- Removed `Accounts::EVENT_RESOLVE_HOLDER`, `ResolveHolderEvent`, `Account::$holderId`, `Accounts::getAccountForOrder()`, `Accounts::getBuyerForOrder()`, `Accounts::getAccountByHolder()`, `Account::getHolder()`, `ResolveBuyerEvent::$account` and `craft.netTerms.getAccountByHolderId()`. The upgrade guide lists each one.
 
 ### Fixed
 - Fixed a bug where the payment summary showed amounts 100 times too large in some locales.

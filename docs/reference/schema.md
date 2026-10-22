@@ -4,18 +4,18 @@ The tables are defined in `src/migrations/Install.php`. Every table has `dateCre
 
 ## netterms_accounts
 
-One account per customer per store.
+An account's terms and credit limit in one store.
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | int | Primary key. |
 | `storeId` | int | Foreign key to `commerce_stores`, cascade. |
-| `holderId` | int | Foreign key to `users`, cascade. Unique with `storeId`. |
+| `title` | string | |
+| `description` | text | Null when blank. |
 | `creditLimit` | decimal | Null for unlimited credit. |
 | `sublimitMode` | string | `ceiling`, `reserved`, or null for the plugin default. |
 | `paymentTerms` | int | Days. Null for the plugin default. |
-| `additionalBillingEmail` | string | Null for no additional address. |
-| `sendInvoicesToHolder`, `sendInvoicesToAdditionalBillingEmail` | bool | Which addresses receive emails to the account holder. Default `true`. `sendInvoicesToAdditionalBillingEmail` is ignored while `additionalBillingEmail` is null. |
+| `billingEmail` | string | Null sends billing emails to the invoice's buyers. |
 | `status` | string | `active` or `suspended`. Default `active`. |
 
 ## netterms_buyers
@@ -107,7 +107,7 @@ The invoice email and reminders, in invoice billing. Edited in **Net Terms -> Em
 | `trigger` | string | `issued`, `dueSoon` or `overdue`. One email is `issued`. |
 | `days` | int | Days before or after the due date. Null for the invoice email. |
 | `enabled` | bool | |
-| `sendToHolder`, `sendToBuyers` | bool | The recipients. |
+| `sendToBillingEmail`, `sendToBuyers` | bool | The recipients. |
 | `ccAddresses`, `bccAddresses` | text | Comma-separated. |
 | `replyTo`, `senderName`, `senderAddress` | string | Null to use Craft's email settings. |
 | `subject`, `body` | text | Twig. The body is Markdown. |

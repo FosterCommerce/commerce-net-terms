@@ -4,11 +4,10 @@
 
 {% set selectedSubnavItem = 'accounts' %}
 {% set netTerms = craft.app.plugins.getPlugin('net-terms') %}
-{% set holder = account.getHolder() %}
 {% set currencyCode = account.getCurrency().getCode() %}
 {% set isNew = not account.id %}
 
-{% set title = isNew ? 'account.new'|t('net-terms') : holder.name %}
+{% set title = isNew ? 'account.new'|t('net-terms') : account.title %}
 {% set crumbs = [
 	{ label: 'nav.netTerms'|t('net-terms'), url: url('net-terms') },
 	{ label: 'nav.accounts'|t('net-terms'), url: url('net-terms/accounts') },
@@ -82,10 +81,10 @@
 					<span class="nt-stat-label">{{ 'account.status'|t('net-terms') }}</span>
 					<span class="nt-stat-value"><span class="status {{ account.status.color() }}"></span>{{ account.status.label() }}</span>
 				</div>
-				{% if billing.value == 'invoices' and account.additionalBillingEmail %}
+				{% if billing.value == 'invoices' and account.billingEmail %}
 					<div class="nt-stat">
-						<span class="nt-stat-label">{{ 'account.additionalBillingEmail'|t('net-terms') }}</span>
-						<span class="nt-stat-value">{{ account.additionalBillingEmail }}</span>
+						<span class="nt-stat-label">{{ 'account.billingEmail'|t('net-terms') }}</span>
+						<span class="nt-stat-value">{{ account.billingEmail }}</span>
 					</div>
 				{% endif %}
 			{% endif %}

@@ -36,14 +36,14 @@ Click **Save**. Use Commerce's **Match Order**, **Match Billing Address** and **
 
 Go to **Net Terms -> Accounts -> New account**.
 
-1. Choose the **Account holder**: the customer the account belongs to. The holder becomes the account's first buyer.
+1. Enter a **Title**, such as the customer's company name.
 2. Enter the **Credit limit**.
 3. Leave **Protect sublimits** and **Payment terms** on their defaults.
 4. Click **Save**.
 
 ## 6. Add a buyer
 
-Only buyers can charge orders to an account, and the holder already is one. To let someone else buy on it, open the account's **Buyers** tab, choose a user, leave **Sublimit** blank, and click **Add buyer**.
+Only buyers can charge orders to an account. Open the account's **Buyers** tab, choose a user, leave **Sublimit** blank, and click **Add buyer**.
 
 ![An account's Buyers tab, with two buyers and their sublimits](../resources/img/account-edit.png)
 
@@ -63,4 +63,4 @@ On the account's **Invoices** tab, click **New invoice**, then **Save and send**
 - [Payments](./user-guide/payments.md), recording a check and applying it to invoices
 - [Reminders and emails](./user-guide/reminders.md), the invoice email and reminders before and after a due date
 - [Storefront templates](./dev-guide/storefront-templates.md), building the account and invoice pages
-- [Company accounts](./dev-guide/company-accounts.md), when orders belong to a company rather than the person who places them
+- [Company accounts](./dev-guide/company-accounts.md), linking a company's entries to its accounts and syncing its buyers

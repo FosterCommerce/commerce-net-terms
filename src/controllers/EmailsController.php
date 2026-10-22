@@ -87,7 +87,7 @@ class EmailsController extends Controller
 		$email->name = $this->getTextParam('name');
 		$email->enabled = (bool) $this->request->getBodyParam('enabled');
 		$recipients = $this->request->getBodyParam('recipients');
-		$email->sendToHolder = is_array($recipients) && in_array('holder', $recipients, true);
+		$email->sendToBillingEmail = is_array($recipients) && in_array('billingEmail', $recipients, true);
 		$email->sendToBuyers = is_array($recipients) && in_array('buyers', $recipients, true);
 		$email->ccAddresses = $this->getOptionalTextParam('ccAddresses');
 		$email->bccAddresses = $this->getOptionalTextParam('bccAddresses');

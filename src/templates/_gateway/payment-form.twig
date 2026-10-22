@@ -1,7 +1,21 @@
 <p>{{ 'gateway.paymentFormNote'|t('net-terms') }}</p>
 
-{% if availableCredit %}
-	<p>{{ 'gateway.availableCredit'|t('net-terms', { available: availableCredit|money }) }}</p>
+{% if options|length > 1 %}
+	{% set firstChargeable = options|filter(option => option.canCharge)|first %}
+	<fieldset>
+		<legend>{{ 'gateway.chooseAccount'|t('net-terms') }}</legend>
+		{% for option in options %}
+			<div>
+				<label>
+					<input type="radio" name="accountId" value="{{ option.account.id }}"{% if firstChargeable and option.account.id == firstChargeable.account.id %} checked{% endif %}>
+					{{ option.account.title }}
+					{% if option.availableCredit %}({{ 'gateway.availableCredit'|t('net-terms', { available: option.availableCredit|money }) }}){% endif %}
+				</label>
+			</div>
+		{% endfor %}
+	</fieldset>
+{% elseif options|length == 1 and (options|first).availableCredit %}
+	<p>{{ 'gateway.availableCredit'|t('net-terms', { available: (options|first).availableCredit|money }) }}</p>
 {% endif %}
 
 {% if canCharge %}

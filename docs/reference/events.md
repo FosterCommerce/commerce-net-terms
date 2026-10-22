@@ -1,41 +1,15 @@
 # Events
 
-## Accounts::EVENT_RESOLVE_HOLDER
-
-**Fires:** when the plugin works out which account an order charges: before showing the gateway, before charging, and when the control panel shows a **Payment terms (Net Terms)** field on an order with no linked account.
-
-**Payload:** `fostercommerce\netterms\events\ResolveHolderEvent`
-
-| Property | Type | Notes |
-|---|---|---|
-| `order` | `Order` | The order being paid. |
-| `holderId` | `int\|null` | The user whose account the order charges. Defaults to the order's customer when they hold an account, otherwise to the holder of the one account the signed-in buyer buys on. Set `null` for no account. |
-
-**Listen:**
-
-```php
-use fostercommerce\netterms\events\ResolveHolderEvent;
-use fostercommerce\netterms\services\Accounts;
-use yii\base\Event;
-
-Event::on(Accounts::class, Accounts::EVENT_RESOLVE_HOLDER, function (ResolveHolderEvent $event) {
-	$event->holderId = MyCompanies::accountUserIdForOrder($event->order);
-});
-```
-
-**Common use:** charging a company's account for orders its members place.
-
 ## Accounts::EVENT_RESOLVE_BUYER
 
-**Fires:** after the plugin resolves the account, to work out which buyer is charging the order.
+**Fires:** when the plugin works out which accounts an order can charge: before showing the gateway, when rendering its payment form, before charging, and when the control panel shows a **Payment terms (Net Terms)** field on an order with no linked account.
 
 **Payload:** `fostercommerce\netterms\events\ResolveBuyerEvent`
 
 | Property | Type | Notes |
 |---|---|---|
 | `order` | `Order` | The order being paid. |
-| `account` | `Account` | The resolved account. |
-| `userId` | `int\|null` | The user charging the order. Defaults to the signed-in user. |
+| `userId` | `int\|null` | The user charging the order. The order can charge each account this user is an active buyer on in the order's store. Defaults to the order's customer, or on the storefront to `null` unless the customer is signed in. Set `null` to refuse Net Terms for the order. |
 
 **Listen:**
 
@@ -45,11 +19,14 @@ use fostercommerce\netterms\services\Accounts;
 use yii\base\Event;
 
 Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, function (ResolveBuyerEvent $event) {
-	$event->userId = MyOrders::placedByUserId($event->order);
+	// Refuse Net Terms for guests and personal orders
+	if ($event->userId !== null) {
+		$event->userId = MyCompanies::companyForOrder($event->order)?->accountUserId;
+	}
 });
 ```
 
-**Common use:** charging the person who placed an order when someone else pays for it.
+**Common use:** charging every order a company places to one user that stands for the company.
 
 ## Accounts::EVENT_DEFINE_ACCOUNT_ACCESS
 
@@ -61,8 +38,8 @@ Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, function (ResolveBuyer
 |---|---|---|
 | `account` | `Account` | The account. |
 | `user` | `User` | The user asking. |
-| `canManage` | `bool` | Whether the user can manage buyers and sublimits. Defaults to whether the user is the holder. |
-| `canView` | `bool` | Whether `craft.netTerms` returns the account's figures, buyers, invoices and orders to the user, and whether `net-terms/storefront/invoice-pdf` serves its invoice PDFs. Defaults to whether the user is the holder or an active buyer. A user who can manage the account can always see it. |
+| `canManage` | `bool` | Whether the user can manage buyers and sublimits. Defaults to `false`. |
+| `canView` | `bool` | Whether `craft.netTerms` returns the account's figures, buyers, invoices and orders to the user, and whether `net-terms/storefront/invoice-pdf` serves its invoice PDFs. Defaults to whether the user is an active buyer. A user who can manage the account can always see it. |
 
 **Listen:**
 
@@ -72,8 +49,8 @@ use fostercommerce\netterms\services\Accounts;
 use yii\base\Event;
 
 Event::on(Accounts::class, Accounts::EVENT_DEFINE_ACCOUNT_ACCESS, function (DefineAccountAccessEvent $event) {
-	$event->canManage = MyCompanies::isAdmin($event->user, $event->account->holderId);
-	$event->canView = MyCompanies::isMember($event->user, $event->account->holderId);
+	$event->canManage = MyCompanies::isAdmin($event->user, $event->account->id);
+	$event->canView = MyCompanies::isMember($event->user, $event->account->id);
 });
 ```
 
@@ -99,36 +76,11 @@ use fostercommerce\netterms\services\Accounts;
 use yii\base\Event;
 
 Event::on(Accounts::class, Accounts::EVENT_DEFINE_BUYER_ELIGIBILITY, function (DefineBuyerEligibilityEvent $event) {
-	$event->isEligible = MyCompanies::isMember($event->user, $event->account->holderId);
+	$event->isEligible = MyCompanies::isMember($event->user, $event->account->id);
 });
 ```
 
 **Common use:** letting a company's admins add only the company's own people. Without a handler, `net-terms/storefront/save-buyer` doesn't add buyers.
-
-## Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY
-
-**Fires:** when an account is created, before it is saved.
-
-**Payload:** `fostercommerce\netterms\events\DefineHolderEligibilityEvent`
-
-| Property | Type | Notes |
-|---|---|---|
-| `user` | `User` | The user chosen as the account holder. |
-| `isEligible` | `bool` | Defaults to `true`. Set `false` to refuse the account with "That user can’t hold a Net Terms account." |
-
-**Listen:**
-
-```php
-use fostercommerce\netterms\events\DefineHolderEligibilityEvent;
-use fostercommerce\netterms\services\Accounts;
-use yii\base\Event;
-
-Event::on(Accounts::class, Accounts::EVENT_DEFINE_HOLDER_ELIGIBILITY, function (DefineHolderEligibilityEvent $event) {
-	$event->isEligible = MyCompanies::isCompanyUser($event->user);
-});
-```
-
-**Common use:** letting only the users that represent companies hold accounts.
 
 ## Ledger::EVENT_AFTER_ADD_ENTRY
 

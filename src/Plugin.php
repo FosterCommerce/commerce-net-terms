@@ -30,6 +30,7 @@ use craft\web\UrlManager;
 use fostercommerce\netterms\elements\InvoicedOrdersBlocker;
 use fostercommerce\netterms\elements\LedgerUsersBlocker;
 use fostercommerce\netterms\enums\Billing;
+use fostercommerce\netterms\fields\NetTermsAccount;
 use fostercommerce\netterms\fields\PaymentTerms;
 use fostercommerce\netterms\gateways\NetTerms;
 use fostercommerce\netterms\helpers\Amounts;
@@ -73,7 +74,7 @@ class Plugin extends BasePlugin
 
 	public bool $hasReadOnlyCpSettings = true;
 
-	public string $schemaVersion = '2.0.1';
+	public string $schemaVersion = '2.0.2';
 
 	/**
 	 * @var array<int, string>
@@ -111,6 +112,7 @@ class Plugin extends BasePlugin
 			Fields::EVENT_REGISTER_FIELD_TYPES,
 			static function (RegisterComponentTypesEvent $event): void {
 				$event->types[] = PaymentTerms::class;
+				$event->types[] = NetTermsAccount::class;
 			},
 		);
 

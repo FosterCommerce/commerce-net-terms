@@ -24,7 +24,6 @@ $app = require $root . '/vendor/craftcms/cms/bootstrap/console.php';
 
 use craft\commerce\elements\Order;
 use craft\commerce\elements\Variant;
-use craft\commerce\models\payments\OffsitePaymentForm;
 use craft\commerce\models\Transaction;
 use craft\commerce\Plugin as Commerce;
 use craft\commerce\records\Transaction as TransactionRecord;
@@ -51,6 +50,7 @@ use fostercommerce\netterms\models\Email;
 use fostercommerce\netterms\models\Invoice;
 use fostercommerce\netterms\models\InvoiceLine;
 use fostercommerce\netterms\models\Payment;
+use fostercommerce\netterms\models\payments\NetTermsPaymentForm;
 use fostercommerce\netterms\models\Settings;
 use fostercommerce\netterms\Plugin;
 use fostercommerce\netterms\services\Accounts;
@@ -131,8 +131,10 @@ $tag = 'cl' . substr(md5((string) microtime(true)), 0, 6);
 $createdUsers = [];
 /** @var \craft\commerce\elements\Order[] $createdOrders */
 $createdOrders = [];
+/** @var \fostercommerce\netterms\models\Account[] $createdAccounts */
+$createdAccounts = [];
 
-// The user a test order is paid by, standing in for the signed-in user a console request lacks
+// The user a test order is paid by, replacing any user a site's own handler resolves
 $payingUserId = null;
 Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, static function (ResolveBuyerEvent $event) use (&$payingUserId): void {
 	$event->userId = $payingUserId;
@@ -174,15 +176,15 @@ function makeUser(string $key): User
 	return $user;
 }
 
-function makeAccount(User $holder, string $limit, ?SublimitMode $mode = null): Account
+function makeAccount(User $owner, string $limit, ?SublimitMode $mode = null): Account
 {
-	global $storeId, $accounts;
+	global $storeId, $accounts, $createdAccounts;
 	/** @var int $storeId */
 	/** @var Accounts $accounts */
 
 	$account = new Account([
 		'storeId' => $storeId,
-		'holderId' => $holder->id,
+		'title' => $owner->username,
 		'creditLimit' => money($limit),
 		'sublimitMode' => $mode,
 	]);
@@ -190,6 +192,9 @@ function makeAccount(User $holder, string $limit, ?SublimitMode $mode = null): A
 	if (! $accounts->saveAccount($account)) {
 		throw new RuntimeException('Could not save account: ' . json_encode($account->getErrors()));
 	}
+
+	$createdAccounts[] = $account;
+	makeBuyer($account, $owner, null);
 
 	return $account;
 }
@@ -278,13 +283,15 @@ function fixtureVariant(): Variant
 	throw new RuntimeException('The site has no available variant priced at 10 or more to order.');
 }
 
-function pay(Order $order): ?string
+function pay(Order $order, ?int $accountId = null): ?string
 {
 	$redirect = null;
 	$transaction = null;
 
 	try {
-		commerce()->getPayments()->processPayment($order, new OffsitePaymentForm(), $redirect, $transaction);
+		commerce()->getPayments()->processPayment($order, new NetTermsPaymentForm([
+			'accountId' => $accountId,
+		]), $redirect, $transaction);
 	} catch (Throwable $throwable) {
 		return $throwable->getMessage();
 	}
@@ -307,18 +314,18 @@ function netTermsGatewayId(): int
 echo "Net Terms checks ({$tag})\n";
 
 try {
-	$holder = makeUser('holder');
+	$owner = makeUser('owner');
 	$alice = makeUser('alice');
 	$bob = makeUser('bob');
 	$outsider = makeUser('outsider');
 
-	$account = makeAccount($holder, '1000.00', SublimitMode::Ceiling);
+	$account = makeAccount($owner, '1000.00', SublimitMode::Ceiling);
 	$aliceBuyer = makeBuyer($account, $alice, '300.00');
 	$bobBuyer = makeBuyer($account, $bob, null);
 
 	section('Account access');
-	check('the holder can see the account', fn (): bool => $accounts->canView($account, $holder));
 	check('an active buyer can see the account', fn (): bool => $accounts->canView($account, $bob));
+	check('a buyer can’t manage the account by default', fn (): bool => ! $accounts->canManage($account, $owner));
 	check('an inactive buyer can’t see the account', function () use ($accounts, $account): bool {
 		$formerBuyer = makeUser('former');
 		Db::update(Table::BUYERS, [
@@ -353,8 +360,8 @@ try {
 	section('Unlimited credit');
 
 	check('an account can have unlimited credit', function () use ($accounts): bool|string {
-		$unlimitedHolder = makeUser('unlimited');
-		$unlimitedAccount = makeAccount($unlimitedHolder, '0.00');
+		$unlimitedOwner = makeUser('unlimited');
+		$unlimitedAccount = makeAccount($unlimitedOwner, '0.00');
 		$unlimitedAccount->unlimited = true;
 		$unlimitedAccount->creditLimit = null;
 
@@ -363,21 +370,21 @@ try {
 		}
 
 		$reloaded = expect($accounts->getFreshAccountById((int) $unlimitedAccount->id), Account::class);
-		$holderBuyer = expect($accounts->getBuyer($reloaded, (int) $unlimitedHolder->id), Buyer::class);
+		$ownerBuyer = expect($accounts->getBuyer($reloaded, (int) $unlimitedOwner->id), Buyer::class);
 
-		if ($accounts->getAvailableCredit($holderBuyer) !== null || ! $accounts->canCharge($holderBuyer, money('1000000.00'))) {
+		if ($accounts->getAvailableCredit($ownerBuyer) !== null || ! $accounts->canCharge($ownerBuyer, money('1000000.00'))) {
 			return 'limited';
 		}
 
-		$holderBuyer->sublimit = money('50.00');
-		$accounts->saveBuyer($holderBuyer);
+		$ownerBuyer->sublimit = money('50.00');
+		$accounts->saveBuyer($ownerBuyer);
 
-		return same($accounts->getAvailableCredit($holderBuyer), '50.00');
+		return same($accounts->getAvailableCredit($ownerBuyer), '50.00');
 	});
 	check('a limited account needs a credit limit', function () use ($accounts): bool|string {
 		$limitless = new Account([
 			'storeId' => commerce()->getStores()->getPrimaryStore()?->id,
-			'holderId' => makeUser('nolimit')->id,
+			'title' => 'No limit',
 		]);
 
 		return ! $accounts->saveAccount($limitless) && $limitless->hasErrors('creditLimit') ? true : 'saved';
@@ -402,7 +409,7 @@ try {
 		return $saved ? true : json_encode($bobBuyer->getErrors());
 	});
 
-	check('reserved can’t become the default while an account on the default is over-reserved', function () use ($account, $bobBuyer, $accounts, $holder): bool|string {
+	check('reserved can’t become the default while an account on the default is over-reserved', function () use ($account, $bobBuyer, $accounts): bool|string {
 		$account->sublimitMode = null;
 		$accounts->saveAccount($account);
 		$bobBuyer->sublimit = money('900.00');
@@ -425,7 +432,7 @@ try {
 		$refusedError = (string) $overReservedSettings->getFirstError('defaultSublimitMode');
 		$fittingError = (string) $fittingSettings->getFirstError('defaultSublimitMode');
 
-		return str_contains($refusedError, $holder->getName()) && ! str_contains($fittingError, $holder->getName()) ? true : 'refused: ' . $refusedError . ' / fitting: ' . $fittingError;
+		return str_contains($refusedError, (string) $account->title) && ! str_contains($fittingError, (string) $account->title) ? true : 'refused: ' . $refusedError . ' / fitting: ' . $fittingError;
 	});
 
 	section('Available credit, reserved mode');
@@ -633,7 +640,18 @@ try {
 	$unitPrice = Amounts::toMoney((string) $variant->getPrice(), $currency);
 	$gatewayAccount = makeAccount($outsider, Amounts::toDecimal($unitPrice->multiply('5')->divide('2')));
 	$outsiderBuyer = expect($accounts->getBuyer($gatewayAccount, (int) $outsider->id), Buyer::class);
-	check('a new account has its holder as a buyer with no sublimit', fn (): true|string => $outsiderBuyer->active && $outsiderBuyer->sublimit === null ? true : 'inactive or capped');
+	check('a new account has no buyers', function () use ($accounts): bool|string {
+		$emptyAccount = new Account([
+			'storeId' => commerce()->getStores()->getPrimaryStore()?->id,
+			'title' => 'No buyers',
+			'unlimited' => true,
+		]);
+		$accounts->saveAccount($emptyAccount);
+		$buyers = $emptyAccount->getBuyers();
+		$accounts->deleteAccount($emptyAccount);
+
+		return $buyers === [] ? true : count($buyers) . ' buyers';
+	});
 	$order = makeOrder($outsider, $variant, 2, $gatewayId);
 	$gateway = expect(commerce()->getGateways()->getGatewayById($gatewayId), NetTerms::class);
 	$gateway->paymentType = TransactionRecord::TYPE_PURCHASE;
@@ -688,17 +706,38 @@ try {
 
 	check('a refund of an invoiced charge lowers that invoice line', fn () => $invoices->getLineAmount($outsiderLine)->equals($accounts->getBalanceByBuyer($outsiderBuyer)) ? true : 'line ' . Amounts::toDecimal($invoices->getLineAmount($outsiderLine)));
 
-	check('a buyer’s own order charges the account they buy on', function () use ($accounts, $variant, $gatewayId, $account): bool|string {
-		// Stand in for a buyer who doesn't hold the account, signed in and paying for their own order
-		$bobOnly = makeUser('bob-only');
-		$bobBuyer = makeBuyer($account, $bobOnly, null);
-		$bobsOrder = makeOrder($bobOnly, $variant, 1, $gatewayId);
-		Craft::$app->getUser()->setIdentity($bobOnly);
-		$resolved = $accounts->getAccountForOrder($bobsOrder);
-		Craft::$app->getUser()->setIdentity(null);
+	check('the user charging an order defaults to its customer', function () use ($accounts, $variant, $gatewayId): bool|string {
+		$customer = makeUser('customer');
+		$customerOrder = makeOrder($customer, $variant, 1, $gatewayId);
 
-		return $resolved?->id === $account->id ? true : 'resolved to ' . var_export($resolved?->id, true) . ' for buyer ' . $bobBuyer->id;
+		// Read the default before the run's handler and any site handler replace it
+		$defaultUserId = null;
+		$recordDefault = static function (ResolveBuyerEvent $event) use (&$defaultUserId): void {
+			$defaultUserId = $event->userId;
+		};
+		Event::on(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, $recordDefault, null, false);
+		try {
+			$accounts->getBuyersForOrder($customerOrder);
+		} finally {
+			Event::off(Accounts::class, Accounts::EVENT_RESOLVE_BUYER, $recordDefault);
+		}
+
+		return $defaultUserId === $customer->id ? true : var_export($defaultUserId, true);
 	});
+
+	$secondAccount = makeAccount(makeUser('second'), Amounts::toDecimal($unitPrice->multiply('5')));
+	$secondBuyer = makeBuyer($secondAccount, $outsider, null);
+	$twoAccountOrder = makeOrder($outsider, $variant, 1, $gatewayId);
+	check('the payment form lets a buyer on two accounts choose one', fn (): true|string => substr_count((string) $gateway->getPaymentFormHtml([
+		'order' => $twoAccountOrder,
+	]), 'type="radio"') === 2 ? true : 'no choice');
+	check('a buyer on two accounts who chooses neither is declined', fn (): true|string => pay($twoAccountOrder) !== null ? true : 'paid');
+	check('a buyer on two accounts is charged on the account they choose', function () use ($twoAccountOrder, $secondAccount, $secondBuyer, $accounts): bool|string {
+		$error = pay($twoAccountOrder, (int) $secondAccount->id);
+
+		return $error ?? same($accounts->getBalanceByBuyer($secondBuyer), Amounts::toDecimal(Amounts::toMoney((string) $twoAccountOrder->getTotalPrice(), $secondBuyer->getAccount()->getCurrency())));
+	});
+	$accounts->removeBuyer($secondBuyer);
 
 	section('Card payments recorded by staff');
 
@@ -789,7 +828,7 @@ try {
 
 		return ! $accounts->saveBuyer($duplicateBuyer) && $duplicateBuyer->hasErrors('userId') ? true : 'saved';
 	});
-	check('a user who holds an account can’t be deleted', fn (): true|string => Craft::$app->getElements()->deleteElement($holder) === false ? true : 'deleted');
+	check('a buyer with ledger entries can’t be deleted', fn (): true|string => Craft::$app->getElements()->deleteElement($alice) === false ? true : 'deleted');
 
 	section('Order billing');
 
@@ -797,15 +836,15 @@ try {
 	$creditOrders = $plugin->getCreditOrders();
 
 	try {
-		$orderHolder = makeUser('orderholder');
-		$orderAccount = makeAccount($orderHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$orderBuyer = expect($accounts->getBuyer($orderAccount, (int) $orderHolder->id), Buyer::class);
-		$payingUserId = $orderHolder->id;
+		$orderOwner = makeUser('orderowner');
+		$orderAccount = makeAccount($orderOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$orderBuyer = expect($accounts->getBuyer($orderAccount, (int) $orderOwner->id), Buyer::class);
+		$payingUserId = $orderOwner->id;
 		$reload = static fn (Order $order): Order => expect(Order::find()->id($order->id)->one(), Order::class);
 		$outstanding = static fn (Order $order): Money => Amounts::toMoney((string) $reload($order)->getOutstandingBalance(), $currency);
 
-		$firstOrder = makeOrder($orderHolder, $variant, 1, $gatewayId);
-		$secondOrder = makeOrder($orderHolder, $variant, 2, $gatewayId);
+		$firstOrder = makeOrder($orderOwner, $variant, 1, $gatewayId);
+		$secondOrder = makeOrder($orderOwner, $variant, 2, $gatewayId);
 		check('an order charged in order billing is authorized, not paid', function () use ($firstOrder, $reload): bool|string {
 			if (($error = pay($firstOrder)) !== null) {
 				return $error;
@@ -991,11 +1030,11 @@ try {
 	section('Order edits in invoice billing');
 
 	try {
-		$editHolder = makeUser('editholder');
-		$editAccount = makeAccount($editHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$editBuyer = expect($accounts->getBuyer($editAccount, (int) $editHolder->id), Buyer::class);
-		$payingUserId = $editHolder->id;
-		$editOrder = makeOrder($editHolder, $variant, 2, $gatewayId);
+		$editOwner = makeUser('editowner');
+		$editAccount = makeAccount($editOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$editBuyer = expect($accounts->getBuyer($editAccount, (int) $editOwner->id), Buyer::class);
+		$payingUserId = $editOwner->id;
+		$editOrder = makeOrder($editOwner, $variant, 2, $gatewayId);
 		$runQueue = static function (): void {
 			/** @var craft\queue\Queue $queue */
 			$queue = Craft::$app->getQueue();
@@ -1075,11 +1114,11 @@ try {
 				: $settled->getPaidStatus() . ', balance ' . Amounts::toDecimal($accounts->getBalanceByBuyer($editBuyer));
 		});
 
-		$cutHolder = makeUser('cutholder');
-		$cutAccount = makeAccount($cutHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$cutBuyer = expect($accounts->getBuyer($cutAccount, (int) $cutHolder->id), Buyer::class);
-		$payingUserId = $cutHolder->id;
-		$cutOrder = makeOrder($cutHolder, $variant, 2, $gatewayId);
+		$cutOwner = makeUser('cutowner');
+		$cutAccount = makeAccount($cutOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$cutBuyer = expect($accounts->getBuyer($cutAccount, (int) $cutOwner->id), Buyer::class);
+		$payingUserId = $cutOwner->id;
+		$cutOrder = makeOrder($cutOwner, $variant, 2, $gatewayId);
 		pay($cutOrder);
 		$setCutQty = static function (int $qty) use ($cutOrder, $variant, $runQueue): Order {
 			$edited = expect(Order::find()->id($cutOrder->id)->one(), Order::class);
@@ -1193,7 +1232,7 @@ try {
 	$emails = $plugin->getEmails();
 	/** @var fostercommerce\netterms\models\Email[] $testEmails */
 	$testEmails = [];
-	// An enabled reminder email to the account holder, deleted after the section
+	// An enabled reminder email to the billing email, deleted after the section
 	$makeReminderEmail = static function (string $trigger, int $days) use ($emails, &$testEmails): Email {
 		$email = new Email([
 			'name' => "Check {$trigger} {$days}",
@@ -1236,10 +1275,10 @@ try {
 	};
 
 	try {
-		$reminderHolder = makeUser('reminderholder');
-		$reminderAccount = makeAccount($reminderHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$payingUserId = $reminderHolder->id;
-		$reminderOrder = makeOrder($reminderHolder, $variant, 1, $gatewayId);
+		$reminderOwner = makeUser('reminderowner');
+		$reminderAccount = makeAccount($reminderOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $reminderOwner->id;
+		$reminderOrder = makeOrder($reminderOwner, $variant, 1, $gatewayId);
 		pay($reminderOrder);
 		$reminderInvoice = expect($invoices->issueInvoice($reminderAccount), Invoice::class);
 		$invoiceDue = expect($reminderInvoice->dateDue, DateTime::class);
@@ -1249,7 +1288,7 @@ try {
 		// A run on the given moment's day, as the console command makes one
 		$runOn = static fn (DateTime $now): array => $reminders->sendReminders((clone $now)->setTime(0, 0), (clone $now)->setTime(0, 0)->modify('+1 day'));
 
-		check('a due-soon reminder whose moment came before the invoice existed is skipped', function () use ($runOn, $makeReminderEmail, $emails, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+		check('a due-soon reminder whose moment came before the invoice existed is skipped', function () use ($runOn, $makeReminderEmail, $emails, $invoiceDue, $sentToCount, $reminderOwner): bool|string {
 			$longEmail = $makeReminderEmail('dueSoon', 45);
 			try {
 				$runOn((clone $invoiceDue)->modify('-45 days'));
@@ -1257,27 +1296,27 @@ try {
 				$emails->deleteEmail($longEmail);
 			}
 
-			return $sentToCount((string) $reminderHolder->email) === 0 ? true : 'sent';
+			return $sentToCount((string) $reminderOwner->email) === 0 ? true : 'sent';
 		});
-		check('no reminder goes out before the due-soon moment', function () use ($runOn, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+		check('no reminder goes out before the due-soon moment', function () use ($runOn, $invoiceDue, $sentToCount, $reminderOwner): bool|string {
 			$runOn((clone $invoiceDue)->modify('-10 days'));
 
-			return $sentToCount((string) $reminderHolder->email) === 0 ? true : 'sent';
+			return $sentToCount((string) $reminderOwner->email) === 0 ? true : 'sent';
 		});
-		check('the due-soon reminder goes to the account holder on the run after its moment', function () use ($runOn, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+		check('the due-soon reminder goes to the invoice’s buyer on the run after its moment, since the account has no billing email', function () use ($runOn, $invoiceDue, $sentToCount, $reminderOwner): bool|string {
 			$runOn((clone $invoiceDue)->modify('-7 days')->modify('+1 hour'));
 
-			return $sentToCount((string) $reminderHolder->email) === 1 ? true : $sentToCount((string) $reminderHolder->email) . ' sent';
+			return $sentToCount((string) $reminderOwner->email) === 1 ? true : $sentToCount((string) $reminderOwner->email) . ' sent';
 		});
-		check('a reminder goes out once', function () use ($reminders, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+		check('a reminder goes out once', function () use ($reminders, $invoiceDue, $sentToCount, $reminderOwner): bool|string {
 			$reminders->sendReminders((clone $invoiceDue)->modify('-8 days'), (clone $invoiceDue)->modify('-6 days'));
 
-			return $sentToCount((string) $reminderHolder->email) === 1 ? true : $sentToCount((string) $reminderHolder->email) . ' sent';
+			return $sentToCount((string) $reminderOwner->email) === 1 ? true : $sentToCount((string) $reminderOwner->email) . ' sent';
 		});
-		check('the overdue reminder goes out after the overdue days', function () use ($runOn, $invoiceDue, $sentToCount, $reminderHolder): bool|string {
+		check('the overdue reminder goes out after the overdue days', function () use ($runOn, $invoiceDue, $sentToCount, $reminderOwner): bool|string {
 			$runOn((clone $invoiceDue)->modify('+1 day')->modify('+1 hour'));
 
-			return $sentToCount((string) $reminderHolder->email) === 2 ? true : $sentToCount((string) $reminderHolder->email) . ' sent';
+			return $sentToCount((string) $reminderOwner->email) === 2 ? true : $sentToCount((string) $reminderOwner->email) . ' sent';
 		});
 		check('the reminder subject renders from the email', function () use ($emails, $overdueEmail, $reminderInvoice): bool|string {
 			/** @var ArrayObject<int, string> $subjects */
@@ -1296,11 +1335,10 @@ try {
 
 			return $subject === 'Invoice ' . $reminderInvoice->number . ' is overdue' ? true : $subject;
 		});
-		// To addresses of the overdue email, with the account's additional billing email and choices set
-		$recipientsWithAdditionalBillingEmail = static function (string $additionalBillingEmail, bool $sendInvoicesToHolder = true, bool $sendInvoicesToAdditionalBillingEmail = true) use ($accounts, $emails, $overdueEmail, $reminderInvoice, $reminderAccount): array {
-			$reminderAccount->additionalBillingEmail = $additionalBillingEmail;
-			$reminderAccount->sendInvoicesToHolder = $sendInvoicesToHolder;
-			$reminderAccount->sendInvoicesToAdditionalBillingEmail = $sendInvoicesToAdditionalBillingEmail;
+		// To addresses of the overdue email, with the account's billing email set
+		$recipientsWithBillingEmail = static function (?string $billingEmail, bool $sendToBuyers = false) use ($accounts, $emails, $overdueEmail, $reminderInvoice, $reminderAccount): array {
+			$reminderAccount->billingEmail = $billingEmail;
+			$overdueEmail->sendToBuyers = $sendToBuyers;
 			if (! $accounts->saveAccount($reminderAccount)) {
 				throw new RuntimeException('Could not save account: ' . Json::encode($reminderAccount->getErrors()));
 			}
@@ -1315,46 +1353,31 @@ try {
 				$emails->send($overdueEmail, $reminderInvoice);
 			} finally {
 				Event::off(craft\mail\Mailer::class, craft\mail\Mailer::EVENT_AFTER_SEND, $captureRecipients);
-				$reminderAccount->additionalBillingEmail = null;
-				$reminderAccount->sendInvoicesToHolder = true;
-				$reminderAccount->sendInvoicesToAdditionalBillingEmail = true;
+				$reminderAccount->billingEmail = null;
+				$overdueEmail->sendToBuyers = false;
 				$accounts->saveAccount($reminderAccount);
 			}
 
 			return $recipientLists->getArrayCopy()[0] ?? [];
 		};
-		check('an email to the holder goes to the holder and the account’s additional billing email', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder, $tag): bool|string {
-			$additionalBillingEmail = $tag . '-billing@net-terms.example';
-			$recipients = $recipientsWithAdditionalBillingEmail($additionalBillingEmail);
+		check('an email to the billing email goes only to the account’s billing email', function () use ($recipientsWithBillingEmail, $tag): bool|string {
+			$billingEmail = $tag . '-billing@net-terms.example';
+			$recipients = $recipientsWithBillingEmail($billingEmail);
 
-			return $recipients === [(string) $reminderHolder->email, $additionalBillingEmail] ? true : Json::encode($recipients);
+			return $recipients === [$billingEmail] ? true : Json::encode($recipients);
 		});
-		check('an account that leaves out the holder sends only to its additional billing email', function () use ($recipientsWithAdditionalBillingEmail, $tag): bool|string {
-			$additionalBillingEmail = $tag . '-billing@net-terms.example';
-			$recipients = $recipientsWithAdditionalBillingEmail($additionalBillingEmail, false);
+		check('an email to the billing email goes to the invoice’s buyers when the account has none', function () use ($recipientsWithBillingEmail, $reminderOwner): bool|string {
+			$recipients = $recipientsWithBillingEmail(null);
 
-			return $recipients === [$additionalBillingEmail] ? true : Json::encode($recipients);
+			return $recipients === [(string) $reminderOwner->email] ? true : Json::encode($recipients);
 		});
-		check('an account that leaves out its additional billing email sends only to the holder', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder, $tag): bool|string {
-			$recipients = $recipientsWithAdditionalBillingEmail($tag . '-billing@net-terms.example', true, false);
+		check('a billing email that differs from a buyer’s only in case gets one email', function () use ($recipientsWithBillingEmail, $reminderOwner): bool|string {
+			// Change the case of the domain only, since the run blocks mail that doesn't start with its tag
+			[$localPart, $domain] = explode('@', (string) $reminderOwner->email);
+			$billingEmail = $localPart . '@' . strtoupper($domain);
+			$recipients = $recipientsWithBillingEmail($billingEmail, true);
 
-			return $recipients === [(string) $reminderHolder->email] ? true : Json::encode($recipients);
-		});
-		check('an additional billing email that differs from the holder’s only in case gets one email', function () use ($recipientsWithAdditionalBillingEmail, $reminderHolder): bool|string {
-			$recipients = $recipientsWithAdditionalBillingEmail(strtoupper((string) $reminderHolder->email));
-
-			return $recipients === [(string) $reminderHolder->email] ? true : Json::encode($recipients);
-		});
-		check('an account can’t leave out the holder without an additional billing email', function () use ($accounts, $reminderAccount): bool|string {
-			$reminderAccount->sendInvoicesToHolder = false;
-			try {
-				$saved = $accounts->saveAccount($reminderAccount);
-			} finally {
-				$reminderAccount->sendInvoicesToHolder = true;
-				$reminderAccount->clearErrors();
-			}
-
-			return $saved ? 'saved' : true;
+			return $recipients === [$billingEmail] ? true : Json::encode($recipients);
 		});
 
 		$reminderPayment = new Payment([
@@ -1365,10 +1388,10 @@ try {
 			'dateReceived' => new DateTime(),
 		]);
 		$payments->recordPayment($reminderPayment, $fullAllocation($reminderInvoice));
-		$paidHolder = makeUser('paidholder');
-		$paidAccount = makeAccount($paidHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$payingUserId = $paidHolder->id;
-		pay(makeOrder($paidHolder, $variant, 1, $gatewayId));
+		$paidOwner = makeUser('paidowner');
+		$paidAccount = makeAccount($paidOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $paidOwner->id;
+		pay(makeOrder($paidOwner, $variant, 1, $gatewayId));
 		$paidInvoice = expect($invoices->issueInvoice($paidAccount), Invoice::class);
 		$payments->recordPayment(new Payment([
 			'accountId' => $paidAccount->id,
@@ -1377,18 +1400,18 @@ try {
 			'reference' => 'Check 3002',
 			'dateReceived' => new DateTime(),
 		]), $fullAllocation($paidInvoice));
-		check('a paid invoice gets no reminder', function () use ($runOn, $paidInvoice, $sentToCount, $paidHolder): bool|string {
+		check('a paid invoice gets no reminder', function () use ($runOn, $paidInvoice, $sentToCount, $paidOwner): bool|string {
 			$runOn((clone expect($paidInvoice->dateDue, DateTime::class))->modify('+1 day')->modify('+1 hour'));
 
-			return $sentToCount((string) $paidHolder->email) === 0 ? true : 'sent';
+			return $sentToCount((string) $paidOwner->email) === 0 ? true : 'sent';
 		});
 
-		$multiHolder = makeUser('multiholder');
-		$multiAccount = makeAccount($multiHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$payingUserId = $multiHolder->id;
-		pay(makeOrder($multiHolder, $variant, 1, $gatewayId));
+		$multiOwner = makeUser('multiowner');
+		$multiAccount = makeAccount($multiOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $multiOwner->id;
+		pay(makeOrder($multiOwner, $variant, 1, $gatewayId));
 		$multiInvoice = expect($invoices->issueInvoice($multiAccount), Invoice::class);
-		check('two reminder emails with one schedule each send once', function () use ($runOn, $makeReminderEmail, $emails, $multiInvoice, $sentToCount, $multiHolder): bool|string {
+		check('two reminder emails with one schedule each send once', function () use ($runOn, $makeReminderEmail, $emails, $multiInvoice, $sentToCount, $multiOwner): bool|string {
 			// The 7-day reminder made for the section shares this schedule
 			$secondEmail = $makeReminderEmail('dueSoon', 7);
 			$multiDue = expect($multiInvoice->dateDue, DateTime::class);
@@ -1399,7 +1422,7 @@ try {
 				$emails->deleteEmail($secondEmail);
 			}
 
-			return $sentToCount((string) $multiHolder->email) === 2 ? true : $sentToCount((string) $multiHolder->email) . ' sent';
+			return $sentToCount((string) $multiOwner->email) === 2 ? true : $sentToCount((string) $multiOwner->email) . ' sent';
 		});
 
 		$gateway->paymentType = TransactionRecord::TYPE_AUTHORIZE;
@@ -1415,10 +1438,10 @@ try {
 			'enabled' => true,
 			'type' => 'overdue',
 		]];
-		$creditOrderHolder = makeUser('reminderorderholder');
-		makeAccount($creditOrderHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$payingUserId = $creditOrderHolder->id;
-		$creditOrder = makeOrder($creditOrderHolder, $variant, 1, $gatewayId);
+		$creditOrderOwner = makeUser('reminderorderowner');
+		makeAccount($creditOrderOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $creditOrderOwner->id;
+		$creditOrder = makeOrder($creditOrderOwner, $variant, 1, $gatewayId);
 		pay($creditOrder);
 		$overdueDate = static function () use ($creditOrder): DateTime {
 			$completed = expect(Order::find()->id($creditOrder->id)->one(), Order::class);
@@ -1469,11 +1492,11 @@ try {
 	section('Switching billing');
 
 	try {
-		$switchHolder = makeUser('switchholder');
-		$switchAccount = makeAccount($switchHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$switchBuyer = expect($accounts->getBuyer($switchAccount, (int) $switchHolder->id), Buyer::class);
-		$payingUserId = $switchHolder->id;
-		pay(makeOrder($switchHolder, $variant, 1, $gatewayId));
+		$switchOwner = makeUser('switchowner');
+		$switchAccount = makeAccount($switchOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$switchBuyer = expect($accounts->getBuyer($switchAccount, (int) $switchOwner->id), Buyer::class);
+		$payingUserId = $switchOwner->id;
+		pay(makeOrder($switchOwner, $variant, 1, $gatewayId));
 		$switchInvoice = expect($invoices->issueInvoice($switchAccount), Invoice::class);
 		// Credit the account outside the invoice, so its balance is $0 while the invoice stays unpaid
 		$ledger->adjust($switchAccount, $switchBuyer, $invoices->getTotal($switchInvoice)->negative(), 'Credit');
@@ -1496,11 +1519,11 @@ try {
 	section('Deleting orders');
 
 	try {
-		$deleteHolder = makeUser('deleteholder');
-		$deleteAccount = makeAccount($deleteHolder, Amounts::toDecimal($unitPrice->multiply('20')));
-		$payingUserId = $deleteHolder->id;
+		$deleteOwner = makeUser('deleteowner');
+		$deleteAccount = makeAccount($deleteOwner, Amounts::toDecimal($unitPrice->multiply('20')));
+		$payingUserId = $deleteOwner->id;
 		$elements = Craft::$app->getElements();
-		$invoicedOrder = makeOrder($deleteHolder, $variant, 1, $gatewayId);
+		$invoicedOrder = makeOrder($deleteOwner, $variant, 1, $gatewayId);
 		pay($invoicedOrder);
 		expect($invoices->issueInvoice($deleteAccount), Invoice::class);
 
@@ -1511,7 +1534,7 @@ try {
 		});
 
 		$balanceWithoutLooseOrder = $accounts->getBalanceByAccount($deleteAccount);
-		$looseOrder = makeOrder($deleteHolder, $variant, 1, $gatewayId);
+		$looseOrder = makeOrder($deleteOwner, $variant, 1, $gatewayId);
 		pay($looseOrder);
 		$balanceWithOrder = $accounts->getBalanceByAccount($deleteAccount);
 
@@ -1552,9 +1575,9 @@ try {
 
 	section('Over the limit');
 
-	$overHolder = makeUser('overholder');
-	$overAccount = makeAccount($overHolder, '100.00');
-	$overBuyer = expect($accounts->getBuyer($overAccount, (int) $overHolder->id), Buyer::class);
+	$overOwner = makeUser('overowner');
+	$overAccount = makeAccount($overOwner, '100.00');
+	$overBuyer = expect($accounts->getBuyer($overAccount, (int) $overOwner->id), Buyer::class);
 	$overBuyer->sublimit = money('50.00');
 	$accounts->saveBuyer($overBuyer);
 	// Adjust past both limits, since adjustments aren't checked against credit
@@ -1627,9 +1650,9 @@ try {
 } finally {
 	$elements = Craft::$app->getElements();
 
-	// Delete the accounts first, since an invoice stops its orders being deleted and an account holder can't be deleted
+	// Delete the accounts first, since an invoice stops its orders being deleted and a buyer with entries can't be deleted
 	Db::delete(Table::ACCOUNTS, [
-		'holderId' => array_map(static fn (User $createdUser): int => (int) $createdUser->id, $createdUsers),
+		'id' => array_map(static fn (Account $createdAccount): int => (int) $createdAccount->id, $createdAccounts),
 	]);
 
 	foreach ($createdOrders as $createdOrder) {

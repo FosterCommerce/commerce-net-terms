@@ -5,7 +5,7 @@
 	<thead>
 		<tr>
 			<th>{{ 'payment.dateReceived'|t('net-terms') }}</th>
-			{% if showAccount %}<th>{{ 'account.holder'|t('net-terms') }}</th>{% endif %}
+			{% if showAccount %}<th>{{ 'payment.account'|t('net-terms') }}</th>{% endif %}
 			<th>{{ 'payment.method'|t('net-terms') }}</th>
 			<th>{{ 'payment.reference'|t('net-terms') }}</th>
 			<th class="nt-amount">{{ 'payment.amount'|t('net-terms') }}</th>
@@ -19,7 +19,7 @@
 				<th scope="row"><a href="{{ url('net-terms/payments/' ~ payment.id) }}">{{ payment.dateReceived|date('short') }}</a></th>
 				{% if showAccount %}
 					{% set paymentAccount = netTerms.accounts.getAccountById(payment.accountId) %}
-					<td><a href="{{ paymentAccount.cpEditUrl }}">{{ paymentAccount.getHolder().name }}</a></td>
+					<td><a href="{{ paymentAccount.cpEditUrl }}">{{ paymentAccount.title }}</a></td>
 				{% endif %}
 				<td>{{ payment.method.label() }}</td>
 				<td>{{ payment.reference ?? '-' }}</td>

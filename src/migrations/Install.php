@@ -44,14 +44,13 @@ class Install extends Migration
 		$this->createTable(Table::ACCOUNTS, [
 			'id' => $this->primaryKey(),
 			'storeId' => $this->integer()->notNull(),
-			'holderId' => $this->integer()->notNull(),
+			'title' => $this->string()->notNull(),
+			'description' => $this->text(),
 			// Null for unlimited credit
 			'creditLimit' => $this->decimal(14, 4),
 			'sublimitMode' => $this->string(20),
 			'paymentTerms' => $this->integer(),
-			'additionalBillingEmail' => $this->string(),
-			'sendInvoicesToHolder' => $this->boolean()->notNull()->defaultValue(true),
-			'sendInvoicesToAdditionalBillingEmail' => $this->boolean()->notNull()->defaultValue(true),
+			'billingEmail' => $this->string(),
 			'status' => $this->string(20)->notNull()->defaultValue(AccountStatus::Active->value),
 			'dateCreated' => $this->dateTime()->notNull(),
 			'dateUpdated' => $this->dateTime()->notNull(),
@@ -109,7 +108,7 @@ class Install extends Migration
 			'trigger' => $this->string(20)->notNull(),
 			'days' => $this->integer(),
 			'enabled' => $this->boolean()->notNull()->defaultValue(true),
-			'sendToHolder' => $this->boolean()->notNull()->defaultValue(true),
+			'sendToBillingEmail' => $this->boolean()->notNull()->defaultValue(true),
 			'sendToBuyers' => $this->boolean()->notNull()->defaultValue(false),
 			'ccAddresses' => $this->text(),
 			'bccAddresses' => $this->text(),
@@ -187,7 +186,7 @@ class Install extends Migration
 
 	private function createIndexes(): void
 	{
-		$this->createIndex(null, Table::ACCOUNTS, ['storeId', 'holderId'], true);
+		$this->createIndex(null, Table::ACCOUNTS, ['storeId'], false);
 		$this->createIndex(null, Table::BUYERS, ['accountId', 'userId'], true);
 		$this->createIndex(null, Table::BUYERS, ['userId'], false);
 		$this->createIndex(null, Table::INVOICES, ['number'], true);
@@ -211,7 +210,6 @@ class Install extends Migration
 	private function addForeignKeys(): void
 	{
 		$this->addForeignKey(null, Table::ACCOUNTS, ['storeId'], CommerceTable::STORES, ['id'], 'CASCADE');
-		$this->addForeignKey(null, Table::ACCOUNTS, ['holderId'], CraftTable::USERS, ['id'], 'CASCADE');
 
 		$this->addForeignKey(null, Table::BUYERS, ['accountId'], Table::ACCOUNTS, ['id'], 'CASCADE');
 		$this->addForeignKey(null, Table::BUYERS, ['userId'], CraftTable::USERS, ['id'], 'CASCADE');

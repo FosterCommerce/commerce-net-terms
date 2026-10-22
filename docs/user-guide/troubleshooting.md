@@ -6,7 +6,8 @@ Causes and fixes for problems staff run into with Net Terms.
 
 Check each condition on [paying on account](./checkout.md#at-checkout), and these:
 
-- The order's customer doesn't hold an account, and the signed-in buyer buys on more than one account in the store. A site module has to set which account the order charges; see [company accounts](../dev-guide/company-accounts.md).
+- In the control panel, the order's customer isn't a buyer on an account in the order's store. Net Terms charges the customer's accounts, not the staff member's.
+- On the storefront, the customer isn't signed in. A guest who enters a buyer's email can't charge the buyer's account.
 - The buyer was removed from the account and is inactive. Click **Reactivate** on the account's **Buyers** tab.
 
 ## The payment form says there isn't enough available credit

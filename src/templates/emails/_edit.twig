@@ -125,12 +125,12 @@
 		id: 'recipients',
 		name: 'recipients',
 		options: [
-			{ label: 'email.toHolder'|t('net-terms'), value: 'holder' },
+			{ label: 'email.toBillingEmail'|t('net-terms'), value: 'billingEmail' },
 			{ label: 'email.toBuyers'|t('net-terms'), value: 'buyers' },
 		],
-		values: [email.sendToHolder ? 'holder', email.sendToBuyers ? 'buyers']|filter,
+		values: [email.sendToBillingEmail ? 'billingEmail', email.sendToBuyers ? 'buyers']|filter,
 		required: true,
-		errors: email.getErrors('sendToHolder'),
+		errors: email.getErrors('sendToBillingEmail'),
 	}) }}
 
 	{{ forms.autosuggestField({
