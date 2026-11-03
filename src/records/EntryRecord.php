@@ -13,6 +13,8 @@ use fostercommerce\netterms\db\Table;
  * @property int $id
  * @property int $accountId
  * @property int|null $buyerId
+ * @property string $status
+ * @property string|null $authorizationHash
  * @property string $type
  * @property string $amount
  * @property int|null $orderId

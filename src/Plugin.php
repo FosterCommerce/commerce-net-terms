@@ -74,7 +74,7 @@ class Plugin extends BasePlugin
 
 	public bool $hasReadOnlyCpSettings = true;
 
-	public string $schemaVersion = '2.0.2';
+	public string $schemaVersion = '2.0.3';
 
 	/**
 	 * @var array<int, string>
@@ -312,7 +312,12 @@ class Plugin extends BasePlugin
 				$order = $event->sender;
 
 				// Read the total before the save, since the order recalculates while it saves
-				if ($this->getBilling() === Billing::Invoices && $order->isCompleted && $order->id !== null) {
+				if (
+					$this->getBilling() === Billing::Invoices
+					&& $order->isCompleted
+					&& $order->id !== null
+					&& ! $this->getCreditOrders()->hasPartialPaymentHistory($order)
+				) {
 					// Keep the first total when a listener saves the order again inside this save
 					$this->totalsBeforeSave[$order->id] ??= $this->getCreditOrders()->getStoredTotal($order->id);
 				}

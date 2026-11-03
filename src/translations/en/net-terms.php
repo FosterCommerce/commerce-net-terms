@@ -1,6 +1,11 @@
 <?php
 
 return [
+	'ledger.status' => 'Status',
+	'entryStatus.posted' => 'Posted',
+	'entryStatus.authorized' => 'Authorized',
+	'entryStatus.captured' => 'Captured',
+	'entryStatus.released' => 'Released',
 	// Navigation and permissions
 	'nav.netTerms' => 'Net Terms',
 	'nav.accounts' => 'Accounts',

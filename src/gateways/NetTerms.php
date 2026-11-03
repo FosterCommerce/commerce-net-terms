@@ -16,11 +16,13 @@ use craft\commerce\Plugin as Commerce;
 use craft\commerce\records\Transaction as TransactionRecord;
 use craft\web\Response as WebResponse;
 use craft\web\View;
+use fostercommerce\netterms\enums\AccountStatus;
 use fostercommerce\netterms\enums\Billing;
 use fostercommerce\netterms\errors\LedgerException;
 use fostercommerce\netterms\helpers\Amounts;
 use fostercommerce\netterms\models\Account;
 use fostercommerce\netterms\models\Buyer;
+use fostercommerce\netterms\models\Entry;
 use fostercommerce\netterms\models\payments\NetTermsPaymentForm;
 use fostercommerce\netterms\models\responses\NetTermsResponse;
 use fostercommerce\netterms\Plugin;
@@ -98,10 +100,12 @@ class NetTerms extends Gateway
 
 		// Fall back to the cart on the storefront, since Commerce's example templates pass no order to other gateways
 		$order = $params['order'] ?? (Craft::$app->getRequest()->getIsSiteRequest() ? $this->getCommerce()->getCarts()->getCart() : null);
+		$requestedPaymentAmount = $params['paymentAmount'] ?? null;
+		$paymentAmount = is_numeric($requestedPaymentAmount) ? (string) $requestedPaymentAmount : (string) ($order instanceof Order ? $order->getOutstandingBalance() : 0);
 		$options = $order instanceof Order ? array_map(static fn (Buyer $buyer): array => [
 			'account' => $buyer->getAccount(),
 			'availableCredit' => $accounts->getAvailableCredit($buyer),
-			'canCharge' => $accounts->canCharge($buyer, Amounts::toMoney((string) $order->getOutstandingBalance(), $buyer->getAccount()->getCurrency())),
+			'canCharge' => $accounts->canCharge($buyer, Amounts::toMoney($paymentAmount, $buyer->getAccount()->getCurrency())),
 		], $accounts->getBuyersForOrder($order)) : [];
 
 		return Craft::$app->getView()->renderTemplate('net-terms/_gateway/payment-form', [
@@ -154,6 +158,180 @@ class NetTerms extends Gateway
 		return Plugin::getInstance()->getAccounts()->getBuyersForOrder($order) !== [];
 	}
 
+	/**
+	 * @return array{accountId: int|null, amount: float}
+	 */
+	public function partialPayment(Order $order, float $target, ?int $accountId = null): array
+	{
+		$selection = [
+			'accountId' => null,
+			'amount' => 0.0,
+		];
+		$accounts = Plugin::getInstance()->getAccounts();
+		foreach ($accounts->getBuyersForOrder($order) as $buyer) {
+			if ($accountId !== null && $buyer->accountId !== $accountId) {
+				continue;
+			}
+
+			$account = $accounts->getFreshAccountById((int) $buyer->accountId);
+			if (! $account instanceof Account) {
+				continue;
+			}
+
+			if ($account->status !== AccountStatus::Active) {
+				continue;
+			}
+
+			if ($account->getCurrency()->getCode() !== $order->currency) {
+				continue;
+			}
+
+			$available = $accounts->getAvailableCredit($buyer);
+			$amount = max(0.0, min($target, $available instanceof Money ? (float) Amounts::toDecimal($available) : $target));
+			if ($amount > $selection['amount']) {
+				$selection = [
+					'accountId' => (int) $buyer->accountId,
+					'amount' => $amount,
+				];
+			}
+
+			if ($amount >= $target) {
+				break;
+			}
+		}
+
+		return $selection;
+	}
+
+	/**
+	 * Keep the account lock through persistence of a partial payment and its Commerce transaction.
+	 *
+	 * @template TReturn
+	 * @param callable(): TReturn $callback
+	 * @return TReturn
+	 */
+	public function withPartialPaymentLock(Order $order, BasePaymentForm $form, callable $callback): mixed
+	{
+		$buyer = $this->getChosenBuyer($order, $form);
+		if (! $buyer instanceof Buyer) {
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
+		}
+
+		return Plugin::getInstance()->getLedger()->withAccountLock((int) $buyer->accountId, $callback);
+	}
+
+	/**
+	 * Keep the original account locked while a partial purchase is refunded and recorded in Commerce.
+	 *
+	 * @template TReturn
+	 * @param callable(): TReturn $callback
+	 * @return TReturn
+	 */
+	public function withPartialRefundLock(Transaction $purchase, callable $callback): mixed
+	{
+		$ledger = Plugin::getInstance()->getLedger();
+		$charge = $ledger->getChargeByTransactionHash((string) $purchase->hash) ?? $ledger->getAuthorization((string) $purchase->hash);
+		if ($charge === null) {
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.chargeNotFound'));
+		}
+
+		return $ledger->withAccountLock((int) $charge->accountId, $callback);
+	}
+
+	public function authorizePartial(Transaction $transaction, BasePaymentForm $form): RequestResponseInterface
+	{
+		$order = $transaction->getOrder();
+		$buyer = $order instanceof Order ? $this->getChosenBuyer($order, $form) : null;
+		if (! $order instanceof Order || ! $buyer instanceof Buyer || $transaction->type !== TransactionRecord::TYPE_AUTHORIZE) {
+			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
+		}
+
+		try {
+			$entry = Plugin::getInstance()->getLedger()->authorize($buyer, Amounts::toMoney((string) $transaction->amount, $buyer->getAccount()->getCurrency()), (int) $order->id, (string) $transaction->hash);
+
+			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
+		} catch (LedgerException $ledgerException) {
+			return NetTermsResponse::declined($ledgerException->getMessage());
+		}
+	}
+
+	public function getPartialAuthorization(Transaction $authorization): ?Entry
+	{
+		return Plugin::getInstance()->getLedger()->getAuthorization((string) $authorization->hash);
+	}
+
+	public function resizeAuthorization(Transaction $authorization, float $target): float
+	{
+		if (! is_finite($target)) {
+			throw new LedgerException('The authorization amount is invalid.');
+		}
+
+		$entry = $this->getPartialAuthorization($authorization);
+		if (! $entry instanceof Entry) {
+			throw new LedgerException('The authorization could not be found.');
+		}
+
+		$ledger = Plugin::getInstance()->getLedger();
+
+		return $ledger->withAccountLock((int) $entry->accountId, function () use ($authorization, $target, $ledger): float {
+			$entry = $this->getPartialAuthorization($authorization);
+			if (! $entry instanceof Entry || $entry->status !== \fostercommerce\netterms\enums\EntryStatus::Authorized) {
+				throw new LedgerException('This authorization is no longer active.');
+			}
+
+			$accounts = Plugin::getInstance()->getAccounts();
+			$account = $accounts->getFreshAccountById((int) $entry->accountId);
+			$buyer = $accounts->getBuyerById((int) $entry->buyerId);
+			if (! $account instanceof Account || $account->status !== AccountStatus::Active || ! $buyer instanceof Buyer || ! $buyer->active) {
+				$ledger->releaseAuthorization($entry);
+
+				return 0.0;
+			}
+
+			$amount = Amounts::toMoney((string) max(0.0, $target), $entry->amount->getCurrency());
+			$available = $accounts->getAvailableCredit($buyer);
+			if ($available instanceof Money) {
+				$amount = Money::min($amount, $available->add($entry->amount));
+			}
+
+			$ledger->resizeAuthorization($entry, $amount);
+
+			return (float) Amounts::toDecimal($amount);
+		});
+	}
+
+	public function resizePartialAuthorization(Transaction $authorization, Money $amount): RequestResponseInterface
+	{
+		$entry = $this->getPartialAuthorization($authorization);
+		if (! $entry instanceof Entry) {
+			return NetTermsResponse::declined('The authorization could not be found.');
+		}
+
+		try {
+			Plugin::getInstance()->getLedger()->resizeAuthorization($entry, $amount);
+
+			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
+		} catch (LedgerException $ledgerException) {
+			return NetTermsResponse::declined($ledgerException->getMessage());
+		}
+	}
+
+	public function releaseAuthorization(Transaction $authorization): RequestResponseInterface
+	{
+		$entry = $this->getPartialAuthorization($authorization);
+		if (! $entry instanceof Entry) {
+			return NetTermsResponse::declined('The authorization could not be found.');
+		}
+
+		try {
+			Plugin::getInstance()->getLedger()->releaseAuthorization($entry);
+
+			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
+		} catch (LedgerException $ledgerException) {
+			return NetTermsResponse::declined($ledgerException->getMessage());
+		}
+	}
+
 	public function purchase(Transaction $transaction, BasePaymentForm $form): RequestResponseInterface
 	{
 		return $this->chargeOrder($transaction, $form);
@@ -169,13 +347,13 @@ class NetTerms extends Gateway
 		/** @var Transaction $parent */
 		$parent = $transaction->getParent();
 
-		// Approve a refund of a recorded payment, since that money was returned outside this gateway
-		if ($parent->type === TransactionRecord::TYPE_CAPTURE) {
-			return NetTermsResponse::success('net-terms-refund-' . $parent->id);
-		}
-
 		$ledger = Plugin::getInstance()->getLedger();
 		$charge = $ledger->getChargeByTransactionHash((string) $parent->hash);
+
+		// Order-billing captures record money received outside this gateway.
+		if ($parent->type === TransactionRecord::TYPE_CAPTURE && $charge === null) {
+			return NetTermsResponse::success('net-terms-refund-' . $parent->id);
+		}
 
 		if ($charge === null) {
 			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'gateway.chargeNotFound'));
@@ -192,7 +370,19 @@ class NetTerms extends Gateway
 
 	public function capture(Transaction $transaction, string $reference): RequestResponseInterface
 	{
-		throw new NotImplementedException(Craft::t('commerce', 'This gateway does not support that functionality.'));
+		$parent = $transaction->getParent();
+		$entry = $parent instanceof Transaction ? $this->getPartialAuthorization($parent) : null;
+		if (! $entry instanceof Entry || $entry->orderId !== $transaction->orderId || $transaction->type !== TransactionRecord::TYPE_CAPTURE || $transaction->getOrder()?->isCompleted !== true) {
+			return NetTermsResponse::declined('The authorization could not be found.');
+		}
+
+		try {
+			$captured = Plugin::getInstance()->getLedger()->captureAuthorization($entry, Amounts::toMoney((string) $transaction->amount, $entry->amount->getCurrency()), (string) $transaction->hash);
+
+			return NetTermsResponse::success('net-terms-entry-' . $captured->id);
+		} catch (LedgerException $ledgerException) {
+			return NetTermsResponse::declined($ledgerException->getMessage());
+		}
 	}
 
 	public function completeAuthorize(Transaction $transaction): RequestResponseInterface
@@ -262,7 +452,7 @@ class NetTerms extends Gateway
 
 	public function supportsPartialPayment(): bool
 	{
-		return false;
+		return $this->paymentType === TransactionRecord::TYPE_PURCHASE;
 	}
 
 	public function supportsWebhooks(): bool

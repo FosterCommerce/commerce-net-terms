@@ -13,6 +13,7 @@ use craft\helpers\DateTimeHelper;
 use craft\helpers\Db;
 use DateTime;
 use fostercommerce\netterms\db\Table;
+use fostercommerce\netterms\enums\EntryStatus;
 use fostercommerce\netterms\enums\EntryType;
 use fostercommerce\netterms\errors\AccountBusyException;
 use fostercommerce\netterms\errors\LedgerException;
@@ -31,7 +32,7 @@ use Throwable;
 use yii\base\Component;
 
 /**
- * The append-only ledger, and the only writer of entries.
+ * The ledger and authorization lifecycle, and the only writer of entries.
  */
 class Ledger extends Component
 {
@@ -158,6 +159,7 @@ class Ledger extends Component
 		$record = EntryRecord::findOne([
 			'transactionHash' => $transactionHash,
 			'type' => EntryType::Charge->value,
+			'status' => EntryStatus::postedValues(),
 		]);
 
 		return $record instanceof EntryRecord ? $this->createEntryFromRecord($record) : null;
@@ -170,6 +172,7 @@ class Ledger extends Component
 			->where([
 				'orderId' => $orderId,
 				'type' => EntryType::Charge->value,
+				'status' => EntryStatus::postedValues(),
 			])
 			->orderBy([
 				'id' => SORT_ASC,
@@ -193,6 +196,7 @@ class Ledger extends Component
 			])
 			->from(Table::ENTRIES)
 			->where([
+				'status' => EntryStatus::postedValues(),
 				'accountId' => $account->id,
 			])
 			->andWhere($this->notTrashedOrderCondition())
@@ -229,6 +233,7 @@ class Ledger extends Component
 				'lines' => Table::INVOICE_LINES,
 			], '[[lines.id]] = [[entries.invoiceLineId]]')
 			->where([
+				'entries.status' => EntryStatus::postedValues(),
 				'lines.invoiceId' => $invoiceIds,
 			])
 			->groupBy(['lines.invoiceId'])
@@ -252,6 +257,7 @@ class Ledger extends Component
 			])
 			->from(Table::ENTRIES)
 			->where([
+				'status' => EntryStatus::postedValues(),
 				'invoiceLineId' => $invoiceLineIds,
 			])
 			->groupBy(['invoiceLineId'])
@@ -274,12 +280,14 @@ class Ledger extends Component
 			])
 			->from(Table::ENTRIES)
 			->where([
+				'status' => EntryStatus::postedValues(),
 				'accountId' => $account->id,
 				'invoiceLineId' => null,
 				'type' => $this->invoicedTypeValues(),
 			])
 			->andWhere(['<=', 'dateCreated', Db::prepareDateForDb($cutoff)])
 			->andWhere($this->notTrashedOrderCondition())
+			->andWhere($this->completedPartialPaymentCondition((int) $account->id))
 			->groupBy(['buyerId'])
 			->all();
 
@@ -296,6 +304,142 @@ class Ledger extends Component
 	/**
 	 * @throws LedgerException if the account is locked by another request
 	 */
+	public function getAuthorization(string $authorizationHash): ?Entry
+	{
+		$record = EntryRecord::findOne([
+			'authorizationHash' => $authorizationHash,
+		]);
+
+		return $record instanceof EntryRecord ? $this->createEntryFromRecord($record) : null;
+	}
+
+	/**
+	 * @return array<int, Money>
+	 */
+	public function getReservedByBuyers(Account $account): array
+	{
+		/** @var array<array{buyerId: int|string|null, amount: string|null}> $rows */
+		$rows = (new Query())
+			->select([
+				'buyerId',
+				'amount' => 'SUM([[amount]])',
+			])
+			->from(Table::ENTRIES)
+			->where([
+				'accountId' => $account->id,
+				'status' => EntryStatus::Authorized->value,
+			])
+			->andWhere($this->notTrashedOrderCondition())
+			->groupBy(['buyerId'])
+			->all();
+
+		return collect($rows)
+			->mapWithKeys(static fn (array $row): array => [
+				(int) $row['buyerId'] => Amounts::fromSum($row['amount'], $account->getCurrency()),
+			])
+			->all();
+	}
+
+	public function authorize(Buyer $buyer, Money $amount, int $orderId, string $authorizationHash): Entry
+	{
+		return $this->withAccountLock((int) $buyer->accountId, function () use ($buyer, $amount, $orderId, $authorizationHash): Entry {
+			$existing = $this->getAuthorization($authorizationHash);
+			if ($existing instanceof Entry) {
+				if ($existing->accountId !== $buyer->accountId || $existing->orderId !== $orderId || ! $existing->amount->equals($amount) || $existing->status === EntryStatus::Released) {
+					throw new LedgerException('The authorization no longer matches this payment.');
+				}
+
+				return $existing;
+			}
+
+			$this->requireAuthorizationCredit($buyer, $amount);
+
+			return $this->addEntry(new Entry([
+				'accountId' => $buyer->accountId,
+				'buyerId' => $buyer->id,
+				'type' => EntryType::Charge,
+				'status' => EntryStatus::Authorized,
+				'amount' => $amount,
+				'orderId' => $orderId,
+				'authorizationHash' => $authorizationHash,
+				'transactionHash' => $authorizationHash,
+			]));
+		});
+	}
+
+	public function resizeAuthorization(Entry $authorization, Money $amount): ?Entry
+	{
+		return $this->withAccountLock((int) $authorization->accountId, function () use ($authorization, $amount): ?Entry {
+			$record = $this->authorizationRecord($authorization);
+			if ($record->status !== EntryStatus::Authorized->value) {
+				throw new LedgerException('This authorization is no longer active.');
+			}
+
+			if ($amount->isZero()) {
+				$this->releaseAuthorization($authorization);
+
+				return null;
+			}
+
+			$buyer = Plugin::getInstance()->getAccounts()->getBuyerById((int) $record->buyerId);
+			if (! $buyer instanceof Buyer) {
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
+			}
+
+			$oldAmount = Amounts::toMoney($record->amount, $amount->getCurrency());
+			$this->requireAuthorizationCredit($buyer, $amount, $oldAmount);
+			$record->amount = Amounts::toDecimal($amount);
+			$record->save(false);
+
+			return $this->createEntryFromRecord($record);
+		});
+	}
+
+	public function releaseAuthorization(Entry $authorization): void
+	{
+		$this->withAccountLock((int) $authorization->accountId, function () use ($authorization): void {
+			$record = $this->authorizationRecord($authorization);
+			if ($record->status === EntryStatus::Captured->value) {
+				throw new LedgerException('A captured authorization must be refunded.');
+			}
+
+			if ($record->delete() === false) {
+				throw new LedgerException('The authorization could not be released.');
+			}
+		});
+	}
+
+	public function captureAuthorization(Entry $authorization, Money $amount, string $transactionHash): Entry
+	{
+		return $this->withAccountLock((int) $authorization->accountId, function () use ($authorization, $amount, $transactionHash): Entry {
+			$record = $this->authorizationRecord($authorization);
+			$entry = $this->createEntryFromRecord($record);
+			if (! $entry->amount->equals($amount)) {
+				throw new LedgerException('The capture amount must match the reserved credit.');
+			}
+
+			if ($entry->status === EntryStatus::Captured) {
+				if ($entry->transactionHash !== $transactionHash) {
+					throw new LedgerException('This authorization has already been captured.');
+				}
+
+				return $entry;
+			}
+
+			if ($entry->status !== EntryStatus::Authorized) {
+				throw new LedgerException('This authorization is no longer active.');
+			}
+
+			$record->status = EntryStatus::Captured->value;
+			$record->transactionHash = $transactionHash;
+			$record->save(false);
+			$entry = $this->createEntryFromRecord($record);
+			$this->uncommittedEntries[] = $entry;
+
+			return $entry;
+		});
+	}
+
 	public function charge(Buyer $buyer, Money $amount, int $orderId, string $transactionHash, ?int $authorId = null): Entry
 	{
 		return $this->addEntry(new Entry([
@@ -320,7 +464,9 @@ class Ledger extends Component
 			// Check what the order has left charged under the lock, since two refunds can pass Commerce's own check at once
 			$chargedForOrder = Amounts::fromSum(EntryRecord::find()
 				->where([
+					'status' => EntryStatus::postedValues(),
 					'orderId' => $charge->orderId,
+					'accountId' => $charge->accountId,
 					'type' => [EntryType::Charge->value, EntryType::Refund->value, EntryType::OrderChange->value],
 				])
 				->sum('[[amount]]'), $amount->getCurrency());
@@ -421,9 +567,11 @@ class Ledger extends Component
 				'buyerId' => $buyerId,
 				'invoiceLineId' => null,
 				'type' => $this->invoicedTypeValues(),
+				'status' => EntryStatus::postedValues(),
 			],
 			['<=', 'dateCreated', Db::prepareDateForDb($cutoff)],
 			$this->notTrashedOrderCondition(),
+			$this->completedPartialPaymentCondition($accountId),
 		]);
 	}
 
@@ -485,6 +633,38 @@ class Ledger extends Component
 		return $result;
 	}
 
+	private function authorizationRecord(Entry $authorization): EntryRecord
+	{
+		$record = EntryRecord::findOne([
+			'id' => $authorization->id,
+			'authorizationHash' => $authorization->authorizationHash,
+		]);
+		if (! $record instanceof EntryRecord || $record->authorizationHash === null) {
+			throw new LedgerException('The authorization could not be found.');
+		}
+
+		return $record;
+	}
+
+	private function requireAuthorizationCredit(Buyer $buyer, Money $amount, ?Money $reserved = null): void
+	{
+		$accounts = Plugin::getInstance()->getAccounts();
+		$freshBuyer = $accounts->getBuyerById((int) $buyer->id);
+		$account = $accounts->getFreshAccountById((int) $buyer->accountId);
+		if (! $freshBuyer instanceof Buyer || ! $freshBuyer->active || ! $account instanceof Account || $account->status !== \fostercommerce\netterms\enums\AccountStatus::Active) {
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
+		}
+
+		if (! $amount->isPositive() || ! $amount->getCurrency()->equals($account->getCurrency())) {
+			throw new LedgerException('The authorization amount is invalid.');
+		}
+
+		$available = $accounts->getAvailableCredit($freshBuyer);
+		if ($available instanceof Money && $available->add($reserved ?? Amounts::zero($account->getCurrency()))->lessThan($amount)) {
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notEnoughCredit'));
+		}
+	}
+
 	/**
 	 * The charge’s invoice line, when that line’s balance covers the credit.
 	 */
@@ -496,6 +676,37 @@ class Ledger extends Component
 		return $line instanceof InvoiceLine && Plugin::getInstance()->getInvoices()->getLineBalance($line)->greaterThanOrEqual($credit)
 			? $line->id
 			: null;
+	}
+
+	/**
+	 * @return array<int, mixed>
+	 */
+	private function completedPartialPaymentCondition(int $accountId): array
+	{
+		$accountOrderIds = (new Query())
+			->select(['orderId'])
+			->from(Table::ENTRIES)
+			->where([
+				'accountId' => $accountId,
+			])
+			->andWhere([
+				'not', [
+					'orderId' => null,
+				]]);
+
+		$pendingOrderIds = collect(Order::find()
+			->andWhere([
+				'commerce_orders.id' => $accountOrderIds,
+			])
+			->isCompleted(false)
+			->all())
+			->filter(Plugin::getInstance()->getCreditOrders()->hasPartialPaymentHistory(...))
+			->map(static fn (Order $order): int => (int) $order->id)
+			->all();
+
+		return ['or', [
+			'orderId' => null,
+		], ['not in', 'orderId', $pendingOrderIds]];
 	}
 
 	/**
@@ -537,6 +748,8 @@ class Ledger extends Component
 			'accountId' => $record->accountId,
 			'buyerId' => $record->buyerId,
 			'type' => EntryType::from($record->type),
+			'status' => EntryStatus::from($record->status),
+			'authorizationHash' => $record->authorizationHash,
 			'amount' => Amounts::toMoney($record->amount, Plugin::getInstance()->getAccounts()->getCurrencyByAccountId($record->accountId)),
 			'orderId' => $record->orderId,
 			'transactionHash' => $record->transactionHash,
@@ -555,6 +768,8 @@ class Ledger extends Component
 			$record->accountId = (int) $entry->accountId;
 			$record->buyerId = $entry->buyerId;
 			$record->type = $entry->type->value;
+			$record->status = $entry->status->value;
+			$record->authorizationHash = $entry->authorizationHash;
 			$record->amount = Amounts::toDecimal($entry->amount);
 			$record->orderId = $entry->orderId;
 			$record->transactionHash = $entry->transactionHash;
@@ -566,7 +781,9 @@ class Ledger extends Component
 
 			$entry->id = $record->id;
 			$entry->dateCreated = DateTimeHelper::toDateTime($record->dateCreated) ?: null;
-			$this->uncommittedEntries[] = $entry;
+			if ($entry->status->isPosted()) {
+				$this->uncommittedEntries[] = $entry;
+			}
 
 			return $entry;
 		});

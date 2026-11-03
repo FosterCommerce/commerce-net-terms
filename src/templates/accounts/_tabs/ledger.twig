@@ -10,6 +10,7 @@
 			<tr>
 				<th>{{ 'ledger.date'|t('net-terms') }}</th>
 				<th>{{ 'ledger.type'|t('net-terms') }}</th>
+				<th>{{ 'ledger.status'|t('net-terms') }}</th>
 				<th>{{ 'buyer.user'|t('net-terms') }}</th>
 				<th>{{ 'ledger.detail'|t('net-terms') }}</th>
 				<th class="nt-amount">{{ 'ledger.amount'|t('net-terms') }}</th>
@@ -22,6 +23,7 @@
 				<tr>
 					<td>{{ entry.dateCreated|datetime('short') }}</td>
 					<td>{{ entry.type.label() }}</td>
+					<td>{{ entry.status.label() }}</td>
 					<td>{{ entryBuyer ? entryBuyer.getName() : 'ledger.account'|t('net-terms') }}</td>
 					<td>
 						{% if entryOrder %}<a href="{{ entryOrder.cpEditUrl }}">{{ entryOrder.reference ?: entryOrder.shortNumber }}</a>{% endif %}

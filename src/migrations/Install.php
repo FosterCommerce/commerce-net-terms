@@ -174,6 +174,8 @@ class Install extends Migration
 			'amount' => $this->decimal(14, 4)->notNull(),
 			'orderId' => $this->integer(),
 			'transactionHash' => $this->string(32),
+			'authorizationHash' => $this->string(32),
+			'status' => $this->string(20)->notNull()->defaultValue('posted'),
 			'invoiceLineId' => $this->integer(),
 			'applicationId' => $this->integer(),
 			'note' => $this->text(),
@@ -205,6 +207,7 @@ class Install extends Migration
 		$this->createIndex(null, Table::ENTRIES, ['invoiceLineId'], false);
 		$this->createIndex(null, Table::ENTRIES, ['orderId'], false);
 		$this->createIndex(null, Table::ENTRIES, ['transactionHash'], false);
+		$this->createIndex(null, Table::ENTRIES, ['authorizationHash'], true);
 	}
 
 	private function addForeignKeys(): void

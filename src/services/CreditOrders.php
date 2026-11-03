@@ -49,6 +49,20 @@ class CreditOrders extends Component
 	 */
 	public const REVERSAL_TRANSACTION_CODE = 'net-terms-reversal';
 
+	public function hasPartialPaymentHistory(Order $order): bool
+	{
+		return collect($order->getTransactions())
+			->contains(static function (Transaction $transaction): bool {
+				$response = is_string($transaction->response) ? json_decode($transaction->response, true) : $transaction->response;
+
+				return in_array($transaction->type, [TransactionRecord::TYPE_PURCHASE, TransactionRecord::TYPE_AUTHORIZE, TransactionRecord::TYPE_CAPTURE], true)
+					&& $transaction->status === TransactionRecord::STATUS_SUCCESS
+					&& is_array($response)
+					&& ($response['_fosterCheckoutPartialPayment'] ?? false) === true
+					&& $transaction->getGateway() instanceof NetTerms;
+			});
+	}
+
 	/**
 	 * Link an authorized order to its account and buyer. Writing it twice has no effect.
 	 */
@@ -372,7 +386,7 @@ class CreditOrders extends Component
 			$order = Order::find()->id($orderId)->trashed(null)->one();
 
 			// Skip an order deleted for good since the edit
-			if (! $order instanceof Order) {
+			if (! $order instanceof Order || $this->hasPartialPaymentHistory($order)) {
 				return;
 			}
 
@@ -403,7 +417,11 @@ class CreditOrders extends Component
 	public function validateTotalChange(Order $order): void
 	{
 		// Skip the credit check in full recalculation mode, since the totals don't include the new adjustments until the save
-		if (! $order->isCompleted || $order->getRecalculationMode() === Order::RECALCULATION_MODE_ALL) {
+		if (
+			! $order->isCompleted
+			|| $order->getRecalculationMode() === Order::RECALCULATION_MODE_ALL
+			|| $this->hasPartialPaymentHistory($order)
+		) {
 			return;
 		}
 

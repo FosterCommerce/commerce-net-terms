@@ -8,6 +8,7 @@ use craft\base\Model;
 use craft\commerce\elements\Order;
 use craft\commerce\Plugin as Commerce;
 use DateTime;
+use fostercommerce\netterms\enums\EntryStatus;
 use fostercommerce\netterms\enums\EntryType;
 use Money\Money;
 
@@ -23,6 +24,10 @@ class Entry extends Model
 	public ?int $buyerId = null;
 
 	public EntryType $type = EntryType::Adjustment;
+
+	public EntryStatus $status = EntryStatus::Posted;
+
+	public ?string $authorizationHash = null;
 
 	public Money $amount;
 
