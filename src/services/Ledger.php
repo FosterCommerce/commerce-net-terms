@@ -704,6 +704,10 @@ class Ledger extends Component
 			->map(static fn (Order $order): int => (int) $order->id)
 			->all();
 
+		if ($pendingOrderIds === []) {
+			return [];
+		}
+
 		return ['or', [
 			'orderId' => null,
 		], ['not in', 'orderId', $pendingOrderIds]];
