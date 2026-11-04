@@ -316,7 +316,7 @@ class Plugin extends BasePlugin
 					$this->getBilling() === Billing::Invoices
 					&& $order->isCompleted
 					&& $order->id !== null
-					&& ! $this->getCreditOrders()->hasPartialPaymentHistory($order)
+					&& ! $this->creditOrders->hasPartialPaymentHistory($order)
 				) {
 					// Keep the first total when a listener saves the order again inside this save
 					$this->totalsBeforeSave[$order->id] ??= $this->getCreditOrders()->getStoredTotal($order->id);

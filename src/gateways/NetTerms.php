@@ -167,7 +167,7 @@ class NetTerms extends Gateway
 			'accountId' => null,
 			'amount' => 0.0,
 		];
-		$accounts = Plugin::getInstance()->getAccounts();
+		$accounts = Plugin::getInstance()->accounts;
 		foreach ($accounts->getBuyersForOrder($order) as $buyer) {
 			if ($accountId !== null && $buyer->accountId !== $accountId) {
 				continue;
@@ -217,7 +217,7 @@ class NetTerms extends Gateway
 			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
 		}
 
-		return Plugin::getInstance()->getLedger()->withAccountLock((int) $buyer->accountId, $callback);
+		return Plugin::getInstance()->ledger->withAccountLock((int) $buyer->accountId, $callback);
 	}
 
 	/**
@@ -229,7 +229,7 @@ class NetTerms extends Gateway
 	 */
 	public function withPartialRefundLock(Transaction $purchase, callable $callback): mixed
 	{
-		$ledger = Plugin::getInstance()->getLedger();
+		$ledger = Plugin::getInstance()->ledger;
 		$charge = $ledger->getChargeByTransactionHash((string) $purchase->hash) ?? $ledger->getAuthorization((string) $purchase->hash);
 		if ($charge === null) {
 			throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.chargeNotFound'));
@@ -247,7 +247,7 @@ class NetTerms extends Gateway
 		}
 
 		try {
-			$entry = Plugin::getInstance()->getLedger()->authorize($buyer, Amounts::toMoney((string) $transaction->amount, $buyer->getAccount()->getCurrency()), (int) $order->id, (string) $transaction->hash);
+			$entry = Plugin::getInstance()->ledger->authorize($buyer, Amounts::toMoney((string) $transaction->amount, $buyer->getAccount()->getCurrency()), (int) $order->id, (string) $transaction->hash);
 
 			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
 		} catch (LedgerException $ledgerException) {
@@ -257,29 +257,29 @@ class NetTerms extends Gateway
 
 	public function getPartialAuthorization(Transaction $authorization): ?Entry
 	{
-		return Plugin::getInstance()->getLedger()->getAuthorization((string) $authorization->hash);
+		return Plugin::getInstance()->ledger->getAuthorization((string) $authorization->hash);
 	}
 
 	public function resizeAuthorization(Transaction $authorization, float $target): float
 	{
 		if (! is_finite($target)) {
-			throw new LedgerException('The authorization amount is invalid.');
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.invalidAmount'));
 		}
 
 		$entry = $this->getPartialAuthorization($authorization);
 		if (! $entry instanceof Entry) {
-			throw new LedgerException('The authorization could not be found.');
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.notFound'));
 		}
 
-		$ledger = Plugin::getInstance()->getLedger();
+		$ledger = Plugin::getInstance()->ledger;
 
 		return $ledger->withAccountLock((int) $entry->accountId, function () use ($authorization, $target, $ledger): float {
 			$entry = $this->getPartialAuthorization($authorization);
 			if (! $entry instanceof Entry || $entry->status !== \fostercommerce\netterms\enums\EntryStatus::Authorized) {
-				throw new LedgerException('This authorization is no longer active.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.inactive'));
 			}
 
-			$accounts = Plugin::getInstance()->getAccounts();
+			$accounts = Plugin::getInstance()->accounts;
 			$account = $accounts->getFreshAccountById((int) $entry->accountId);
 			$buyer = $accounts->getBuyerById((int) $entry->buyerId);
 			if (! $account instanceof Account || $account->status !== AccountStatus::Active || ! $buyer instanceof Buyer || ! $buyer->active) {
@@ -304,11 +304,11 @@ class NetTerms extends Gateway
 	{
 		$entry = $this->getPartialAuthorization($authorization);
 		if (! $entry instanceof Entry) {
-			return NetTermsResponse::declined('The authorization could not be found.');
+			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'authorization.notFound'));
 		}
 
 		try {
-			Plugin::getInstance()->getLedger()->resizeAuthorization($entry, $amount);
+			Plugin::getInstance()->ledger->resizeAuthorization($entry, $amount);
 
 			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
 		} catch (LedgerException $ledgerException) {
@@ -320,11 +320,11 @@ class NetTerms extends Gateway
 	{
 		$entry = $this->getPartialAuthorization($authorization);
 		if (! $entry instanceof Entry) {
-			return NetTermsResponse::declined('The authorization could not be found.');
+			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'authorization.notFound'));
 		}
 
 		try {
-			Plugin::getInstance()->getLedger()->releaseAuthorization($entry);
+			Plugin::getInstance()->ledger->releaseAuthorization($entry);
 
 			return NetTermsResponse::success('net-terms-authorization-' . $entry->id);
 		} catch (LedgerException $ledgerException) {
@@ -373,11 +373,11 @@ class NetTerms extends Gateway
 		$parent = $transaction->getParent();
 		$entry = $parent instanceof Transaction ? $this->getPartialAuthorization($parent) : null;
 		if (! $entry instanceof Entry || $entry->orderId !== $transaction->orderId || $transaction->type !== TransactionRecord::TYPE_CAPTURE || $transaction->getOrder()?->isCompleted !== true) {
-			return NetTermsResponse::declined('The authorization could not be found.');
+			return NetTermsResponse::declined(Craft::t(Plugin::HANDLE, 'authorization.notFound'));
 		}
 
 		try {
-			$captured = Plugin::getInstance()->getLedger()->captureAuthorization($entry, Amounts::toMoney((string) $transaction->amount, $entry->amount->getCurrency()), (string) $transaction->hash);
+			$captured = Plugin::getInstance()->ledger->captureAuthorization($entry, Amounts::toMoney((string) $transaction->amount, $entry->amount->getCurrency()), (string) $transaction->hash);
 
 			return NetTermsResponse::success('net-terms-entry-' . $captured->id);
 		} catch (LedgerException $ledgerException) {

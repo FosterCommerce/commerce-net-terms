@@ -192,7 +192,7 @@ class Accounts extends Component
 		return array_values(array_filter(
 			$this->getAllAccounts(),
 			fn (Account $account): bool => ! $this->getBalanceByAccount($account)->isZero()
-				|| $plugin->getLedger()->getReservedByBuyers($account) !== []
+				|| $plugin->ledger->getReservedByBuyers($account) !== []
 				|| ! $plugin->getPayments()->getUnappliedByAccount($account)->isZero()
 				|| $plugin->getInvoices()->getOpenLinesByAccountId((int) $account->id) !== []
 				|| $this->hasTrashedOrders($account),
@@ -347,7 +347,7 @@ class Accounts extends Component
 
 		return [
 			'balance' => $balance,
-			'room' => $this->calculateAccountRoom($account, Money::sum($balance, ...array_values(Plugin::getInstance()->getLedger()->getReservedByBuyers($account)))),
+			'room' => $this->calculateAccountRoom($account, Money::sum($balance, ...array_values(Plugin::getInstance()->ledger->getReservedByBuyers($account)))),
 			'overLimit' => $overLimit instanceof Money && $overLimit->isPositive() ? $overLimit : null,
 		];
 	}
@@ -417,7 +417,7 @@ class Accounts extends Component
 		$zero = Amounts::zero($account->getCurrency());
 		$buyers = $this->getBuyersByAccountId((int) $account->id);
 		$balanceByBuyerId ??= $this->getBalanceByBuyers($account);
-		foreach (Plugin::getInstance()->getLedger()->getReservedByBuyers($account) as $buyerId => $reserved) {
+		foreach (Plugin::getInstance()->ledger->getReservedByBuyers($account) as $buyerId => $reserved) {
 			$balanceByBuyerId[$buyerId] = ($balanceByBuyerId[$buyerId] ?? $zero)->add($reserved);
 		}
 

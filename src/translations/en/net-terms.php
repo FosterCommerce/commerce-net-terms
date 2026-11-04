@@ -108,6 +108,16 @@ return [
 	'adjustment.noteRequired' => 'Enter a reason for the adjustment.',
 	'adjustment.saved' => 'Adjustment added.',
 
+	// Payment authorizations
+	'authorization.invalidAmount' => 'The authorization amount is invalid.',
+	'authorization.notFound' => 'The authorization could not be found.',
+	'authorization.inactive' => 'This authorization is no longer active.',
+	'authorization.paymentMismatch' => 'The authorization no longer matches this payment.',
+	'authorization.refundRequired' => 'A captured authorization must be refunded.',
+	'authorization.releaseFailed' => 'The authorization could not be released.',
+	'authorization.captureAmountMismatch' => 'The capture amount must match the reserved credit.',
+	'authorization.alreadyCaptured' => 'This authorization has already been captured.',
+
 	// Invoices
 	'invoice.title' => 'Invoice {number}',
 	'invoice.item' => 'invoice',

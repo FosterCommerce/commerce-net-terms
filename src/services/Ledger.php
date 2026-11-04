@@ -346,7 +346,7 @@ class Ledger extends Component
 			$existing = $this->getAuthorization($authorizationHash);
 			if ($existing instanceof Entry) {
 				if ($existing->accountId !== $buyer->accountId || $existing->orderId !== $orderId || ! $existing->amount->equals($amount) || $existing->status === EntryStatus::Released) {
-					throw new LedgerException('The authorization no longer matches this payment.');
+					throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.paymentMismatch'));
 				}
 
 				return $existing;
@@ -372,7 +372,7 @@ class Ledger extends Component
 		return $this->withAccountLock((int) $authorization->accountId, function () use ($authorization, $amount): ?Entry {
 			$record = $this->authorizationRecord($authorization);
 			if ($record->status !== EntryStatus::Authorized->value) {
-				throw new LedgerException('This authorization is no longer active.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.inactive'));
 			}
 
 			if ($amount->isZero()) {
@@ -381,7 +381,7 @@ class Ledger extends Component
 				return null;
 			}
 
-			$buyer = Plugin::getInstance()->getAccounts()->getBuyerById((int) $record->buyerId);
+			$buyer = Plugin::getInstance()->accounts->getBuyerById((int) $record->buyerId);
 			if (! $buyer instanceof Buyer) {
 				throw new LedgerException(Craft::t(Plugin::HANDLE, 'gateway.notABuyer'));
 			}
@@ -400,11 +400,11 @@ class Ledger extends Component
 		$this->withAccountLock((int) $authorization->accountId, function () use ($authorization): void {
 			$record = $this->authorizationRecord($authorization);
 			if ($record->status === EntryStatus::Captured->value) {
-				throw new LedgerException('A captured authorization must be refunded.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.refundRequired'));
 			}
 
 			if ($record->delete() === false) {
-				throw new LedgerException('The authorization could not be released.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.releaseFailed'));
 			}
 		});
 	}
@@ -415,19 +415,19 @@ class Ledger extends Component
 			$record = $this->authorizationRecord($authorization);
 			$entry = $this->createEntryFromRecord($record);
 			if (! $entry->amount->equals($amount)) {
-				throw new LedgerException('The capture amount must match the reserved credit.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.captureAmountMismatch'));
 			}
 
 			if ($entry->status === EntryStatus::Captured) {
 				if ($entry->transactionHash !== $transactionHash) {
-					throw new LedgerException('This authorization has already been captured.');
+					throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.alreadyCaptured'));
 				}
 
 				return $entry;
 			}
 
 			if ($entry->status !== EntryStatus::Authorized) {
-				throw new LedgerException('This authorization is no longer active.');
+				throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.inactive'));
 			}
 
 			$record->status = EntryStatus::Captured->value;
@@ -640,7 +640,7 @@ class Ledger extends Component
 			'authorizationHash' => $authorization->authorizationHash,
 		]);
 		if (! $record instanceof EntryRecord || $record->authorizationHash === null) {
-			throw new LedgerException('The authorization could not be found.');
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.notFound'));
 		}
 
 		return $record;
@@ -648,7 +648,7 @@ class Ledger extends Component
 
 	private function requireAuthorizationCredit(Buyer $buyer, Money $amount, ?Money $reserved = null): void
 	{
-		$accounts = Plugin::getInstance()->getAccounts();
+		$accounts = Plugin::getInstance()->accounts;
 		$freshBuyer = $accounts->getBuyerById((int) $buyer->id);
 		$account = $accounts->getFreshAccountById((int) $buyer->accountId);
 		if (! $freshBuyer instanceof Buyer || ! $freshBuyer->active || ! $account instanceof Account || $account->status !== \fostercommerce\netterms\enums\AccountStatus::Active) {
@@ -656,7 +656,7 @@ class Ledger extends Component
 		}
 
 		if (! $amount->isPositive() || ! $amount->getCurrency()->equals($account->getCurrency())) {
-			throw new LedgerException('The authorization amount is invalid.');
+			throw new LedgerException(Craft::t(Plugin::HANDLE, 'authorization.invalidAmount'));
 		}
 
 		$available = $accounts->getAvailableCredit($freshBuyer);
@@ -700,7 +700,7 @@ class Ledger extends Component
 			])
 			->isCompleted(false)
 			->all())
-			->filter(Plugin::getInstance()->getCreditOrders()->hasPartialPaymentHistory(...))
+			->filter(Plugin::getInstance()->creditOrders->hasPartialPaymentHistory(...))
 			->map(static fn (Order $order): int => (int) $order->id)
 			->all();
 
