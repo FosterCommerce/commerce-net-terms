@@ -13,6 +13,9 @@
 - Added the “Account (Net Terms)” field type, which links an element such as a company entry to an account. In GraphQL, it returns the account’s ID.
 - Added the ability for a buyer on more than one account to choose the account in the payment form. The gateway’s payment form model is now `fostercommerce\netterms\models\payments\NetTermsPaymentForm`.
 - Added `craft.netTerms.getAccounts()`, `Accounts::getBuyersForOrder()`, `Accounts::canView()` and `DefineAccountAccessEvent::$canView`.
+- Added partial payment authorizations for Foster Checkout’s “Use as a partial payment step” setting. An authorization reserves its amount from the account’s available credit, and Foster Checkout captures it when the order completes.
+- Added a Status column to an account’s ledger, showing Posted, Authorized, Captured or Released.
+- Added `NetTerms::partialPayment()`, `withPartialPaymentLock()`, `withPartialRefundLock()`, `authorizePartial()`, `getPartialAuthorization()`, `resizeAuthorization()`, `resizePartialAuthorization()` and `releaseAuthorization()`, `Ledger::authorize()`, `getAuthorization()`, `getReservedByBuyers()`, `resizeAuthorization()`, `releaseAuthorization()` and `captureAuthorization()`, `CreditOrders::hasPartialPaymentHistory()`, the `EntryStatus` enum, and `Entry::$status` and `Entry::$authorizationHash`.
 
 ### Changed
 - Invoices are now issued from a “New invoice” page, and `net-terms/invoices/issue` skips accounts with a draft.
@@ -27,6 +30,7 @@
 - An order can now charge any account its customer is an active buyer on, including an order placed in the control panel, and `ResolveBuyerEvent::$userId` defaults to the order’s customer. On the storefront, the customer has to be signed in.
 - No one can manage an account from the storefront by default. An `Accounts::EVENT_DEFINE_ACCOUNT_ACCESS` handler can allow it.
 - Invoice emails and invoice-billing reminders now go to the account’s billing email, or to the invoice’s buyers when it has no billing email, instead of the account holder.
+- Editing the total of a completed order with a partial payment no longer runs the credit check or adjusts the ledger.
 
 ### Removed
 - Removed the `dueSoonReminderDays`, `overdueReminderDays`, “Invoice email template” and “Storefront order path” settings, the due-soon and overdue system messages, and `Reminders::getSystemMessages()`.
